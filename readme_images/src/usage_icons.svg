@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 480" font-family="-apple-system, 'Segoe UI', Inter, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1220"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#86efac"/>
+      <stop offset="100%" stop-color="#22c55e"/>
+    </linearGradient>
+    <linearGradient id="redGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fb7185"/>
+      <stop offset="100%" stop-color="#ef4444"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1100" height="480" fill="url(#bg)"/>
+
+  <text x="550" y="60" text-anchor="middle" font-size="28" font-weight="800" fill="#f8fafc">Toolbar icon at a glance</text>
+  <text x="550" y="92" text-anchor="middle" font-size="16" fill="#94a3b8">The icon mirrors your mic state so you always know what's happening.</text>
+
+  <!-- 3 states -->
+  <g font-family="-apple-system, 'Segoe UI', Inter, system-ui, sans-serif">
+    <!-- OFF -->
+    <g transform="translate(80 160)">
+      <rect width="280" height="240" rx="16" fill="#0f172a" stroke="#334155"/>
+      <g transform="translate(140 80)">
+        <circle r="40" fill="#475569" opacity="0.4"/>
+        <circle r="30" fill="#64748b"/>
+        <g transform="translate(-12 -16)" fill="#0b1220">
+          <rect x="0" y="0" width="24" height="28" rx="12"/>
+          <path d="M-8 22 a18 18 0 0 0 40 0 v-3 h-4 v3 a14 14 0 0 1 -32 0 v-3 h-4 z"/>
+        </g>
+      </g>
+      <text x="140" y="160" text-anchor="middle" font-size="14" font-weight="700" letter-spacing="2" fill="#94a3b8">GREY</text>
+      <text x="140" y="186" text-anchor="middle" font-size="18" font-weight="700" fill="#f8fafc">Auto-unmute is OFF</text>
+      <text x="140" y="212" text-anchor="middle" font-size="13" fill="#cbd5e1">Click to enable</text>
+    </g>
+
+    <!-- ARMED -->
+    <g transform="translate(400 160)">
+      <rect width="280" height="240" rx="16" fill="#0f172a" stroke="#ef4444" stroke-width="2"/>
+      <g transform="translate(140 80)">
+        <circle r="40" fill="url(#redGrad)" opacity="0.22"/>
+        <circle r="30" fill="url(#redGrad)"/>
+        <g transform="translate(-12 -16)" fill="#fff">
+          <rect x="0" y="0" width="24" height="28" rx="12"/>
+          <path d="M-8 22 a18 18 0 0 0 40 0 v-3 h-4 v3 a14 14 0 0 1 -32 0 v-3 h-4 z"/>
+        </g>
+        <line x1="-26" y1="-26" x2="26" y2="26" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+      </g>
+      <text x="140" y="160" text-anchor="middle" font-size="14" font-weight="700" letter-spacing="2" fill="#fca5a5">RED</text>
+      <text x="140" y="186" text-anchor="middle" font-size="18" font-weight="700" fill="#f8fafc">Muted &amp; armed</text>
+      <text x="140" y="212" text-anchor="middle" font-size="13" fill="#cbd5e1">Talk to unmute</text>
+    </g>
+
+    <!-- IDLE -->
+    <g transform="translate(720 160)">
+      <rect width="280" height="240" rx="16" fill="#0f172a" stroke="#22c55e" stroke-width="2"/>
+      <g transform="translate(140 80)">
+        <circle r="44" fill="url(#greenGrad)" opacity="0.10"/>
+        <circle r="38" fill="url(#greenGrad)" opacity="0.22"/>
+        <circle r="30" fill="url(#greenGrad)"/>
+        <g transform="translate(-12 -16)" fill="#0b1220">
+          <rect x="0" y="0" width="24" height="28" rx="12"/>
+          <path d="M-8 22 a18 18 0 0 0 40 0 v-3 h-4 v3 a14 14 0 0 1 -32 0 v-3 h-4 z"/>
+        </g>
+      </g>
+      <text x="140" y="160" text-anchor="middle" font-size="14" font-weight="700" letter-spacing="2" fill="#86efac">GREEN</text>
+      <text x="140" y="186" text-anchor="middle" font-size="18" font-weight="700" fill="#f8fafc">You're unmuted</text>
+      <text x="140" y="212" text-anchor="middle" font-size="13" fill="#cbd5e1">Nothing to do</text>
+    </g>
+  </g>
+</svg>
