@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <link rel="stylesheet" href="css/bootstrap.min.css">
+  <title>Auto Unmute settings</title>
+  <style>
+    body { min-width: 380px; }
+    #debug_image { width: 100%; max-width: 320px; border-radius: 4px; }
+    .activity-label { font-weight: 600; }
+    figure { margin: 0; text-align: center; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <div class="mx-2 my-1 px-2 py-1 small">
+    <div class="mb-2 custom-control custom-switch">
+      <input type="checkbox" class="custom-control-input" id="useAutoUnmute">
+      <label class="custom-control-label" for="useAutoUnmute">Auto-unmute</label>
+    </div>
+
+    <div id="settings" class="ml-2 pl-2" style="display:none;">
+      <form id="engineForm">
+        <div class="custom-control custom-radio">
+          <input type="radio" id="engineImageSpeech" name="engine" value="engineImageSpeech" class="custom-control-input">
+          <label class="custom-control-label" for="engineImageSpeech">Use image &amp; speech recognition</label>
+        </div>
+        <div class="custom-control custom-radio">
+          <input type="radio" id="engineImage" name="engine" value="engineImage" class="custom-control-input">
+          <label class="custom-control-label" for="engineImage">Use image recognition only</label>
+        </div>
+        <div class="custom-control custom-radio">
+          <input type="radio" id="engineSpeech" name="engine" value="engineSpeech" class="custom-control-input">
+          <label class="custom-control-label" for="engineSpeech">Use speech recognition only</label>
+        </div>
+      </form>
+      <hr class="m-2">
+
+      <div class="form-group">
+        <label for="speakFramesRequired">
+          Sustained speech required: <span id="speakFramesRequiredLabel">2</span> frames (~<span id="speakFramesMs">400</span> ms)
+        </label>
+        <input type="range" class="custom-range" min="1" max="10" step="1" id="speakFramesRequired">
+      </div>
+
+      <div id="imageSettings">
+        <h6 class="mb-2">Image recognition</h6>
+        <div class="form-group">
+          <label for="select_camera">Camera</label>
+          <select class="custom-select custom-select-sm" id="select_camera"></select>
+        </div>
+        <div class="form-group">
+          <label for="range_mar_thresh">
+            Mouth-open threshold (lower = more sensitive):
+            <span id="marThresholdLabel">0.40</span>
+          </label>
+          <div class="row align-items-center">
+            <figure class="col-auto">
+              <img src="images/idle32.png" width="22" height="22" alt="more">
+              <figcaption>more</figcaption>
+            </figure>
+            <input type="range" class="custom-range col-7" min="0.10" max="1.50" step="0.05" id="range_mar_thresh">
+            <figure class="col-auto">
+              <img src="images/armed32.png" width="22" height="22" alt="less">
+              <figcaption>less</figcaption>
+            </figure>
+          </div>
+        </div>
+        <div class="custom-control custom-switch mb-1">
+          <input type="checkbox" class="custom-control-input" id="showImageActivity">
+          <label class="custom-control-label" for="showImageActivity">Show camera activity</label>
+        </div>
+        <img id="debug_image" alt=""><br>
+        <hr class="m-2">
+      </div>
+
+      <div id="speechSettings">
+        <h6 class="mb-2">Speech recognition</h6>
+        <div class="form-group">
+          <label for="select_speech_lang">Language</label>
+          <select class="custom-select custom-select-sm" id="select_speech_lang">
+            <option value="en-US">English (US)</option>
+            <option value="en-GB">English (UK)</option>
+            <option value="ja">日本語</option>
+            <option value="es-ES">Español</option>
+            <option value="fr-FR">Français</option>
+            <option value="de-DE">Deutsch</option>
+            <option value="pt-BR">Português (BR)</option>
+            <option value="zh-CN">中文 (简体)</option>
+          </select>
+        </div>
+        <div class="custom-control custom-switch mb-1">
+          <input type="checkbox" class="custom-control-input" id="showSpeechActivity">
+          <label class="custom-control-label" for="showSpeechActivity">Show speech activity</label>
+        </div>
+        <div id="speechRecognized" class="activity-label"></div>
+        <div id="speechRecognizedWord"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
