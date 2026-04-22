@@ -64,19 +64,19 @@
       <g transform="translate(0 80)">
         <text font-size="13" font-weight="700" letter-spacing="1.5" fill="#94a3b8">DETECTION ENGINE</text>
         <g transform="translate(0 16)">
-          <rect width="280" height="44" rx="10" fill="#1e293b" stroke="#22c55e" stroke-width="2"/>
+          <rect width="200" height="44" rx="10" fill="#1e293b" stroke="#22c55e" stroke-width="2"/>
           <circle cx="22" cy="22" r="6" fill="#22c55e"/>
-          <text x="40" y="28" font-size="15" font-weight="600" fill="#f8fafc">Image + Speech</text>
+          <text x="40" y="28" font-size="14" font-weight="600" fill="#f8fafc">Image + Speech</text>
         </g>
-        <g transform="translate(296 16)">
-          <rect width="180" height="44" rx="10" fill="#1e293b" stroke="#334155"/>
+        <g transform="translate(212 16)">
+          <rect width="150" height="44" rx="10" fill="#1e293b" stroke="#334155"/>
           <circle cx="22" cy="22" r="6" fill="none" stroke="#475569" stroke-width="2"/>
-          <text x="40" y="28" font-size="15" fill="#cbd5e1">Image only</text>
+          <text x="40" y="28" font-size="14" fill="#cbd5e1">Image only</text>
         </g>
-        <g transform="translate(492 16)">
-          <rect width="180" height="44" rx="10" fill="#1e293b" stroke="#334155"/>
+        <g transform="translate(374 16)">
+          <rect width="150" height="44" rx="10" fill="#1e293b" stroke="#334155"/>
           <circle cx="22" cy="22" r="6" fill="none" stroke="#475569" stroke-width="2"/>
-          <text x="40" y="28" font-size="15" fill="#cbd5e1">Speech only</text>
+          <text x="40" y="28" font-size="14" fill="#cbd5e1">Speech only</text>
         </g>
       </g>
 
@@ -100,7 +100,7 @@
       </g>
 
       <!-- Debug panels -->
-      <g transform="translate(560 80)">
+      <g transform="translate(580 80)">
         <text font-size="13" font-weight="700" letter-spacing="1.5" fill="#94a3b8">LIVE DEBUG</text>
         <!-- mouth landmarks -->
         <g transform="translate(0 16)">

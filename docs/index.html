@@ -4,35 +4,76 @@
 <meta charset="UTF-8">
 <title>Auto Unmute for Google Meet</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Forgot you were muted? Auto Unmute detects when you start talking and turns your mic back on automatically. 100% local, open source.">
+<meta property="og:title" content="Auto Unmute for Google Meet">
+<meta property="og:description" content="Forgot you were muted? Auto Unmute detects when you start talking and turns your mic back on automatically.">
+<meta property="og:image" content="./screenshots/promo-marquee.png">
+<meta property="og:type" content="website">
 <style>
-  body { font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-         max-width: 760px; margin: 2.5em auto; padding: 0 1em; color: #222; }
-  h1 { font-size: 2em; margin-bottom: .2em; }
-  .lede { color: #4b5563; font-size: 1.1em; }
-  a.btn { display: inline-block; background: #2563eb; color: #fff; padding: .6em 1.1em;
-          border-radius: 6px; text-decoration: none; margin: .3em .3em 0 0; }
-  a.btn.alt { background: #111827; }
-  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; }
+  :root { --bg: #0b1220; --panel: #0f172a; --border: #1f2a44;
+          --text: #f8fafc; --muted: #94a3b8; --green: #22c55e; --green-soft: #86efac; }
+  * { box-sizing: border-box; }
+  body { font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+         margin: 0; background: linear-gradient(135deg, #0b1220, #1e293b); color: var(--text);
+         min-height: 100vh; }
+  main { max-width: 1100px; margin: 0 auto; padding: 3em 1.25em 5em; }
+  header { text-align: center; margin-bottom: 3em; }
+  h1 { font-size: clamp(2em, 5vw, 3.2em); font-weight: 800; margin: 0 0 .3em; letter-spacing: -0.02em; }
+  .lede { color: var(--muted); font-size: clamp(1.05em, 2vw, 1.25em); max-width: 640px; margin: 0 auto; }
+  .cta { margin: 1.8em 0 0; display: flex; gap: .6em; justify-content: center; flex-wrap: wrap; }
+  a.btn { display: inline-block; padding: .75em 1.4em; border-radius: 999px;
+          text-decoration: none; font-weight: 700; font-size: .95em;
+          background: linear-gradient(180deg, #86efac, #22c55e); color: #0b1220;
+          border: 1px solid #22c55e; }
+  a.btn.alt { background: transparent; color: var(--green-soft); }
+  h2 { font-size: 1.5em; font-weight: 700; margin: 2.5em 0 1em; color: var(--text); }
+  .grid { display: grid; gap: 1.25em; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+  .shot { background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
+          overflow: hidden; }
+  .shot img { display: block; width: 100%; height: auto; }
+  ul.bullets { padding-left: 1.2em; color: #cbd5e1; }
+  ul.bullets li { margin-bottom: .5em; }
+  code { background: #1e293b; padding: 2px 7px; border-radius: 4px; font-size: .9em; color: var(--green-soft); }
+  a { color: var(--green-soft); }
+  footer { color: var(--muted); text-align: center; margin-top: 3em; font-size: .9em; }
 </style>
 </head>
 <body>
-<h1>Auto Unmute for Google Meet</h1>
-<p class="lede">Forgot you were muted? Auto Unmute detects when you start talking and turns your mic back on automatically.</p>
+<main>
+  <header>
+    <h1>Auto Unmute for Google Meet</h1>
+    <p class="lede">Forgot you were muted? Auto Unmute detects when you start talking and turns your mic back on automatically. Never auto-mutes. 100% local.</p>
+    <div class="cta">
+      <a class="btn" href="https://github.com/khalilgharbaoui/auto_unmute/releases/latest">Download latest</a>
+      <a class="btn alt" href="https://github.com/khalilgharbaoui/auto_unmute">Source on GitHub</a>
+      <a class="btn alt" href="./privacy.html">Privacy policy</a>
+    </div>
+  </header>
 
-<p>
-  <a class="btn" href="https://github.com/khalilgharbaoui/auto_unmute">Source on GitHub</a>
-  <a class="btn alt" href="./privacy.html">Privacy Policy</a>
-</p>
+  <div class="grid">
+    <div class="shot"><img src="./screenshots/screenshot-01-hero.png" alt="Forgot you were muted? — before / after"></div>
+    <div class="shot"><img src="./screenshots/screenshot-02-popup.png" alt="Popup UI: detection engine, sensitivity, live debug"></div>
+    <div class="shot"><img src="./screenshots/screenshot-03-howitworks.png" alt="How it works: 4 steps"></div>
+    <div class="shot"><img src="./screenshots/screenshot-04-privacy.png" alt="Nothing leaves your browser"></div>
+  </div>
 
-<h2>How it works</h2>
-<ul>
-  <li>Watches your camera for mouth movement (via <a href="https://github.com/justadudewhohacks/face-api.js">face-api.js</a>) and your microphone for recognised speech (via the Web Speech API).</li>
-  <li>When you have been talking for ~400 ms while muted, it dispatches the same <code>Ctrl+D</code> / <code>⌘+D</code> shortcut you would press yourself.</li>
-  <li>Never re-mutes you on its own. Only you decide when to mute again.</li>
-  <li>100% local. No data leaves your browser.</li>
-</ul>
+  <h2>How it works</h2>
+  <ul class="bullets">
+    <li>Watches your camera for mouth movement (via <a href="https://github.com/justadudewhohacks/face-api.js">face-api.js</a>) and your microphone for recognised speech (via the Web Speech API).</li>
+    <li>When you have been talking for ~400&nbsp;ms while muted, it dispatches the same <code>Ctrl+D</code> / <code>⌘+D</code> shortcut you would press yourself.</li>
+    <li>Never re-mutes you on its own. Only you decide when to mute again.</li>
+    <li>100% local. No data leaves your browser.</li>
+  </ul>
 
-<h2>Install</h2>
-<p>Coming to the Chrome Web Store. In the meantime, see the README on GitHub for "load unpacked" install instructions.</p>
+  <h2>Install</h2>
+  <ul class="bullets">
+    <li>Coming to the Chrome Web Store.</li>
+    <li>Until then: download the ZIP from <a href="https://github.com/khalilgharbaoui/auto_unmute/releases/latest">the latest release</a>, unzip, then visit <code>chrome://extensions</code> → enable Developer mode → "Load unpacked" → pick the folder.</li>
+  </ul>
+
+  <footer>
+    Open source under MIT. Inspired by <a href="https://github.com/morphoinc/auto_mute">morphoinc/auto_mute</a>.
+  </footer>
+</main>
 </body>
 </html>
