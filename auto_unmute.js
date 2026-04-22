@@ -16,6 +16,9 @@ const MUTE_COOLDOWN_MS = 1500;
 // onresult fires; reading raw mic level via AnalyserNode fires within one
 // audio frame (~20ms), giving sub-100ms total unmute latency.
 const AUDIO_RMS_THRESHOLD = 0.025; // ~ -32 dBFS, well above room noise
+// Hold `audioActive` true for this long after RMS drops below threshold so a
+// brief inter-syllable dip ('h-i') doesn't reset the speakStreak counter.
+const AUDIO_HANGOVER_MS = 200;
 const PREVIEW_W = 320;
 const PREVIEW_H = 180;
 const CAMERA_W = 640;
@@ -173,6 +176,7 @@ let analyser = null;
 let analyserBuf = null;
 let audioActive = false;
 let lastAudioRms = 0;
+let lastAboveThresholdAt = 0;
 
 async function startAudioLevel() {
   if (audioStream) return;
@@ -227,7 +231,15 @@ function sampleAudioLevel() {
   }
   const rms = Math.sqrt(sumSq / analyserBuf.length);
   lastAudioRms = rms;
-  audioActive = rms > AUDIO_RMS_THRESHOLD;
+  const now = Date.now();
+  if (rms > AUDIO_RMS_THRESHOLD) {
+    lastAboveThresholdAt = now;
+    audioActive = true;
+  } else {
+    // Hold audioActive across brief sub-threshold dips (consonants, pauses
+    // between syllables) so the streak counter doesn't reset mid-word.
+    audioActive = (now - lastAboveThresholdAt) < AUDIO_HANGOVER_MS;
+  }
 }
 
 // ---- Web Speech API ---------------------------------------------------------
@@ -426,23 +438,10 @@ async function loadModels() {
     modelsReady = true;
     LOG('face-api models ready');
   } catch (err) {
-    console.warn('[auto_unmute] face-api loadFromUri failed:', err);
-    // Fallback: fetch shard binaries ourselves and inject directly. Face-api
-    // exposes `load(buffer)` on each NeuralNetwork which accepts a raw weights
-    // ArrayBuffer (the manifest is required to derive layout, so we use
-    // `loadWeights` style: fetch -> Uint8Array -> nets.X.load(uint8)).
-    try {
-      const [tinyBuf, landmarkBuf] = await Promise.all([
-        fetch(modelsUrl + 'tiny_face_detector_model-shard1').then((r) => r.arrayBuffer()),
-        fetch(modelsUrl + 'face_landmark_68_tiny_model-shard1').then((r) => r.arrayBuffer()),
-      ]);
-      await faceapi.nets.tinyFaceDetector.load(new Uint8Array(tinyBuf));
-      await faceapi.nets.faceLandmark68TinyNet.load(new Uint8Array(landmarkBuf));
-      modelsReady = true;
-      LOG('face-api models ready (manual buffer load)');
-    } catch (err2) {
-      console.warn('[auto_unmute] manual buffer load also failed:', err2);
-    }
+    // face-api's internal HTTP loader is incompatible with chrome-extension://
+    // in MV3 even though raw fetch() works (probes succeed). Audio + speech
+    // engines are sufficient on their own; mouth-movement is a nice-to-have.
+    console.warn('[auto_unmute] face-api unavailable (audio+speech still active):', err);
   }
 }
 
@@ -515,6 +514,13 @@ async function tick() {
 chrome.storage.sync.get(Object.keys(settings), (data) => {
   for (const k of Object.keys(settings)) {
     if (data[k] !== undefined) settings[k] = data[k];
+  }
+  // Migration: older versions defaulted speakFramesRequired to 2, which felt
+  // sluggish with the new 50ms tick + audio fast path. Cap it at 1 if the
+  // user never explicitly raised it (i.e. it's still the legacy default).
+  if (settings.speakFramesRequired === 2) {
+    settings.speakFramesRequired = 1;
+    chrome.storage.sync.set({ speakFramesRequired: 1 });
   }
   applyEngineFlags();
   requestInitialMuteState();
