@@ -4,12 +4,12 @@
 //
 // Lives inside the Google Meet page. Three jobs:
 //   1. Locate Meet's microphone toggle button so we can read its current
-//      state (data-is-muted) and send synthetic Ctrl/Cmd+D to flip it.
+//      state (data-is-muted) and toggle it.
 //   2. Inject a hidden iframe that hosts auto_unmute.js (the detection loop).
-//   3. Relay messages between the iframe / popup / service-worker.
+//   3. Handle requests relayed by the background service worker from the
+//      iframe / popup.
 
-const MUTE_BUS = 'auto_unmute_mute_state_v1';
-const muteStateBus = new BroadcastChannel(MUTE_BUS);
+const LOG = (...a) => console.debug('[auto_unmute/cs]', ...a);
 
 const isMac = navigator.platform.toUpperCase().includes('MAC');
 let micButton = null;
@@ -17,54 +17,95 @@ let lastReportedState = 'unknown'; // 'mute' | 'unmute' | 'unknown'
 
 function readMuteState() {
   if (!micButton) return 'unknown';
-  const v = micButton.dataset.isMuted;
-  if (v === 'true') return 'mute';
-  if (v === 'false') return 'unmute';
+  // Modern Meet uses data-is-muted, but some builds also expose aria-pressed.
+  const ds = micButton.dataset.isMuted;
+  if (ds === 'true') return 'mute';
+  if (ds === 'false') return 'unmute';
+  const ap = micButton.getAttribute('aria-pressed');
+  if (ap === 'true') return 'mute';
+  if (ap === 'false') return 'unmute';
+  // Fall back to aria-label heuristics ("Turn off microphone" = currently on).
+  const label = (micButton.getAttribute('aria-label') || '').toLowerCase();
+  if (/turn off (the )?microphone|mute microphone/.test(label)) return 'unmute';
+  if (/turn on (the )?microphone|unmute microphone/.test(label))  return 'mute';
   return 'unknown';
 }
 
-function broadcastMuteState() {
+function broadcastMuteState(force = false) {
   const s = readMuteState();
-  if (s === lastReportedState) return;
+  if (!force && s === lastReportedState) return;
   lastReportedState = s;
-  muteStateBus.postMessage({ isMuted: s });
+  LOG('mute_state ->', s);
   chrome.runtime.sendMessage({ action: 'mute_state', isMuted: s }, () => {
-    void chrome.runtime.lastError; // ignore "no receiver" during early load
+    void chrome.runtime.lastError;
   });
 }
 
-// Synthesize the same hotkey Meet uses for mic toggle.
+function clickMicButton() {
+  if (!micButton) return false;
+  try {
+    micButton.click();
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
+
+// Synthesize the same hotkey Meet uses for mic toggle. Used as a fallback.
 function pressMuteHotkey() {
+  const target = document.activeElement || document.body;
   const init = {
-    bubbles: true,
-    cancelable: true,
-    keyCode: 68,
-    code: 'KeyD',
-    key: 'd',
+    bubbles: true, cancelable: true,
+    keyCode: 68, which: 68,
+    code: 'KeyD', key: 'd',
   };
   if (isMac) init.metaKey = true; else init.ctrlKey = true;
-  document.dispatchEvent(new KeyboardEvent('keydown', init));
+  target.dispatchEvent(new KeyboardEvent('keydown', init));
+  target.dispatchEvent(new KeyboardEvent('keyup',   init));
+}
+
+function toggleMic() {
+  // Prefer a real click on the button (always trusted). Fall back to hotkey.
+  if (!clickMicButton()) pressMuteHotkey();
 }
 
 // Attach a click listener so we notice manual mutes/unmutes.
 function bindMicButton(el) {
   if (micButton === el) return;
   micButton = el;
-  micButton.addEventListener('click', () => {
-    // The dataset flips after the click; read on next tick.
-    setTimeout(broadcastMuteState, 50);
+  LOG('bound mic button', el);
+  el.addEventListener('click', () => {
+    setTimeout(broadcastMuteState, 80);
   });
-  broadcastMuteState();
+  // Also observe attribute mutations so we catch programmatic flips
+  // (Meet sometimes updates state without a click event).
+  new MutationObserver(() => broadcastMuteState())
+    .observe(el, { attributes: true,
+                   attributeFilter: ['data-is-muted', 'aria-pressed', 'aria-label'] });
+  broadcastMuteState(true);
 }
 
-// Meet rebuilds its toolbar on join/leave; watch the whole subtree.
+// Meet's mic button has changed selectors several times. Try the most-specific
+// markers first and fall back to anything that looks like a mic toggle.
 const findAndBindMicButton = () => {
-  document.querySelectorAll('[data-is-muted][data-tooltip]').forEach((el) => {
-    const tip = (el.dataset.tooltip || '').toUpperCase();
-    if (tip.includes('CTRL+D') || tip.includes('⌘+D') || tip.includes('CMD+D')) {
-      bindMicButton(el);
-    }
-  });
+  // 1. The classic data-is-muted attribute (most stable across redesigns).
+  const candidates = Array.from(document.querySelectorAll('button[data-is-muted], div[role="button"][data-is-muted]'));
+  // 2. Or any button whose aria-label talks about microphone + a hotkey hint.
+  if (candidates.length === 0) {
+    document.querySelectorAll('button[aria-label], div[role="button"][aria-label]').forEach((el) => {
+      const lbl = (el.getAttribute('aria-label') || '').toLowerCase();
+      if (/microphone/.test(lbl) && /(ctrl|⌘|cmd|⌃|⇧)\s*\+\s*d/.test(lbl)) {
+        candidates.push(el);
+      }
+    });
+  }
+  if (candidates.length === 0) return;
+  // Prefer one whose tooltip / label mentions the +D hotkey, otherwise first.
+  const preferred = candidates.find((el) => {
+    const blob = ((el.dataset && el.dataset.tooltip) || el.getAttribute('aria-label') || '').toLowerCase();
+    return /(ctrl|⌘|cmd)\s*\+\s*d/.test(blob);
+  }) || candidates[0];
+  bindMicButton(preferred);
 };
 
 const domObserver = new MutationObserver(findAndBindMicButton);
@@ -75,23 +116,29 @@ findAndBindMicButton();
 window.addEventListener('keydown', (ev) => {
   const hot = isMac ? (ev.key === 'd' && ev.metaKey)
                     : (ev.key === 'd' && ev.ctrlKey);
-  if (hot) setTimeout(broadcastMuteState, 50);
+  if (hot) setTimeout(broadcastMuteState, 80);
 });
 
-// Messages from the iframe / popup.
+// Messages relayed from the iframe (and popup) by background.js.
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (!msg || !msg.action) return false;
+
   if (msg.action === 'request_unmute') {
-    if (readMuteState() === 'mute') pressMuteHotkey();
+    LOG('request_unmute, current=', readMuteState());
+    if (readMuteState() === 'mute') toggleMic();
     setTimeout(() => {
       broadcastMuteState();
       sendResponse({ ok: true, isMuted: readMuteState() });
-    }, 80);
+    }, 120);
     return true; // async response
   }
+
   if (msg.action === 'get_mute_state') {
-    sendResponse({ isMuted: readMuteState() });
+    sendResponse({ ok: true, isMuted: readMuteState() });
     return false;
   }
+
+  return false;
 });
 
 // Inject the detection iframe. Camera + mic permissions are inherited
@@ -104,6 +151,7 @@ function injectDetector() {
   iframe.style.display = 'none';
   iframe.src = chrome.runtime.getURL('auto_unmute.html');
   document.body.appendChild(iframe);
+  LOG('detector iframe injected');
 }
 
 if (document.body) injectDetector();

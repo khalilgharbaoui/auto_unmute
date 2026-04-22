@@ -43,9 +43,9 @@ let lastRecognizedWord = '';
 let unmuteRequestInFlight = false;
 
 const PREVIEW_BUS = 'auto_unmute_preview_v1';
-const MUTE_BUS = 'auto_unmute_mute_state_v1';
 const previewBus = new BroadcastChannel(PREVIEW_BUS);
-const muteStateBus = new BroadcastChannel(MUTE_BUS);
+
+const LOG = (...a) => console.debug('[auto_unmute/iframe]', ...a);
 
 // ---- video & canvas ---------------------------------------------------------
 
@@ -240,11 +240,11 @@ function applyEngineFlags() {
   if (!speechEnabled &&  prevSpeech) stopSpeech();
 }
 
-// ---- mute-state sync from content script ------------------------------------
+// ---- mute-state sync from content script (relayed by background) -----------
 
-muteStateBus.onmessage = (ev) => {
-  const next = ev.data && ev.data.isMuted;
-  if (!next) return;
+function applyMuteState(next) {
+  if (!next || next === muteState) return;
+  LOG('mute_state ->', next);
   muteState = next;
   if (next === 'mute') {
     machineState = STATE.LISTENING;
@@ -253,16 +253,13 @@ muteStateBus.onmessage = (ev) => {
     machineState = STATE.UNMUTED;
     speakStreak = 0;
   }
-};
+}
 
 // Ask the content script for its current view (e.g. just after iframe loads).
 function requestInitialMuteState() {
   chrome.runtime.sendMessage({ action: 'get_mute_state' }, (resp) => {
     void chrome.runtime.lastError;
-    if (resp && resp.isMuted) {
-      muteState = resp.isMuted;
-      machineState = resp.isMuted === 'unmute' ? STATE.UNMUTED : STATE.LISTENING;
-    }
+    if (resp && resp.isMuted) applyMuteState(resp.isMuted);
   });
 }
 
@@ -276,7 +273,11 @@ chrome.runtime.onConnect.addListener((port) => {
 });
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (!msg || !msg.action) return false;
   switch (msg.action) {
+    case 'mute_state':
+      applyMuteState(msg.isMuted);
+      return false;
     case 'settings_changed':
       Object.assign(settings, msg.patch || {});
       if (recognition && msg.patch && msg.patch.speechLang) {
@@ -288,9 +289,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       }
       applyEngineFlags();
       sendResponse({ ok: true });
-      break;
+      return false;
     default:
-      break;
+      return false;
   }
 });
 
@@ -339,11 +340,15 @@ async function tick() {
   if (muteState === 'mute' && machineState === STATE.LISTENING) {
     if (speaking) {
       speakStreak += 1;
+      LOG('speakStreak', speakStreak, '/', settings.speakFramesRequired,
+          'mar', mar.toFixed(2), 'mouthOpen', mouthOpen, 'speechActive', speechActive);
       if (speakStreak >= settings.speakFramesRequired && !unmuteRequestInFlight) {
         unmuteRequestInFlight = true;
+        LOG('-> request_unmute');
         chrome.runtime.sendMessage({ action: 'request_unmute' }, (resp) => {
           unmuteRequestInFlight = false;
           void chrome.runtime.lastError;
+          LOG('request_unmute resp', resp);
           if (resp && resp.isMuted === 'unmute') {
             machineState = STATE.UNMUTED;
             muteState = 'unmute';
