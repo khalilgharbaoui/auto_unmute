@@ -5,7 +5,9 @@
   <title>auto-unmute detector</title>
 </head>
 <body>
-  <script src="js/face-api.min.js"></script>
-  <script src="auto_unmute.js"></script>
+  <!-- auto_unmute.js loads as a module so it can `import` MediaPipe. The
+       face-api.js shim is no longer needed; MediaPipe Face Landmarker
+       replaces it (face-api's loader is broken in MV3 iframes). -->
+  <script type="module" src="auto_unmute.js"></script>
 </body>
 </html>

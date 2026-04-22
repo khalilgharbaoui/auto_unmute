@@ -10,6 +10,43 @@
     #debug_image { width: 100%; max-width: 320px; border-radius: 4px; }
     .activity-label { font-weight: 600; }
     figure { margin: 0; text-align: center; font-size: 11px; }
+
+    /* Audio level meter */
+    .meter-wrap {
+      position: relative;
+      height: 14px;
+      background: #e5e7eb;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .meter-fill {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 0%;
+      background: linear-gradient(90deg, #22c55e 0%, #eab308 70%, #dc2626 100%);
+      transition: width 80ms linear;
+    }
+    .meter-thresh {
+      position: absolute;
+      top: -2px; bottom: -2px;
+      width: 2px;
+      background: #1f2937;
+      pointer-events: none;
+    }
+    .meter-scale {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: #6b7280;
+      margin-top: 2px;
+    }
+    .audio-status {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 2px;
+    }
+    .audio-status.active { color: #16a34a; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -20,31 +57,60 @@
     </div>
 
     <div id="settings" class="ml-2 pl-2" style="display:none;">
+      <h6 class="mb-2">Detection mode</h6>
       <form id="engineForm">
         <div class="custom-control custom-radio">
-          <input type="radio" id="engineImageSpeech" name="engine" value="engineImageSpeech" class="custom-control-input">
-          <label class="custom-control-label" for="engineImageSpeech">Use image &amp; speech recognition</label>
+          <input type="radio" id="engineSpeech" name="engine" value="engineSpeech" class="custom-control-input">
+          <label class="custom-control-label" for="engineSpeech">Audio only <span class="text-muted" style="font-size:11px;">(fastest)</span></label>
         </div>
         <div class="custom-control custom-radio">
           <input type="radio" id="engineImage" name="engine" value="engineImage" class="custom-control-input">
-          <label class="custom-control-label" for="engineImage">Use image recognition only</label>
+          <label class="custom-control-label" for="engineImage">Camera only <span class="text-muted" style="font-size:11px;">(mouth movement only)</span></label>
         </div>
         <div class="custom-control custom-radio">
-          <input type="radio" id="engineSpeech" name="engine" value="engineSpeech" class="custom-control-input">
-          <label class="custom-control-label" for="engineSpeech">Use speech recognition only</label>
+          <input type="radio" id="engineRecognition" name="engine" value="engineRecognition" class="custom-control-input">
+          <label class="custom-control-label" for="engineRecognition">Speech recognition only <span class="text-muted" style="font-size:11px;">(language based)</span></label>
+        </div>
+        <div class="custom-control custom-radio">
+          <input type="radio" id="engineImageSpeech" name="engine" value="engineImageSpeech" class="custom-control-input">
+          <label class="custom-control-label" for="engineImageSpeech">Audio + camera + speech recognition <span class="text-muted" style="font-size:11px;">(most reliable)</span></label>
         </div>
       </form>
       <hr class="m-2">
 
       <div class="form-group">
         <label for="speakFramesRequired">
-          Sustained speech required: <span id="speakFramesRequiredLabel">2</span> frames (~<span id="speakFramesMs">400</span> ms)
+          Consecutive detections required: <span id="speakFramesRequiredLabel">1</span> checks (~<span id="speakFramesMs">25</span> ms)
         </label>
         <input type="range" class="custom-range" min="1" max="10" step="1" id="speakFramesRequired">
       </div>
 
+      <div id="audioSettings" class="form-group">
+        <h6 class="mb-2">Audio Detection</h6>
+        <label for="audioRmsThreshold">
+          Mic sensitivity: trigger above <span id="audioThresholdLabel">-46</span> dB
+          <span id="audioThresholdHint" class="text-muted" style="font-size:11px;">(quiet speech)</span>
+        </label>
+        <input type="range" class="custom-range" min="-60" max="-20" step="1" id="audioRmsThreshold">
+        <div class="meter-scale">
+          <span>-60</span><span>-50</span><span>-40</span><span>-30</span><span>-20 dB</span>
+        </div>
+        <div class="meter-wrap">
+          <div class="meter-fill" id="audioMeterFill"></div>
+          <div class="meter-thresh" id="audioMeterThresh"></div>
+        </div>
+        <div class="meter-scale">
+          <span>silent</span><span>whisper</span><span>normal</span><span>loud</span><span>shout</span>
+        </div>
+        <div class="audio-status" id="audioStatus">Quiet</div>
+        <div class="custom-control custom-switch mt-1">
+          <input type="checkbox" class="custom-control-input" id="showAudioActivity" checked>
+          <label class="custom-control-label" for="showAudioActivity" style="font-size:11px;">Show live mic level</label>
+        </div>
+      </div>
+
       <div id="imageSettings">
-        <h6 class="mb-2">Image recognition</h6>
+        <h6 class="mb-2">Camera Detection</h6>
         <div class="form-group">
           <label for="select_camera">Camera</label>
           <select class="custom-select custom-select-sm" id="select_camera"></select>
@@ -52,14 +118,14 @@
         <div class="form-group">
           <label for="range_mar_thresh">
             Mouth-open threshold (lower = more sensitive):
-            <span id="marThresholdLabel">0.40</span>
+            <span id="marThresholdLabel">0.20</span>
           </label>
           <div class="row align-items-center">
             <figure class="col-auto">
               <img src="images/idle32.png" width="22" height="22" alt="more">
               <figcaption>more</figcaption>
             </figure>
-            <input type="range" class="custom-range col-7" min="0.10" max="1.50" step="0.05" id="range_mar_thresh">
+            <input type="range" class="custom-range col-7" min="0.05" max="0.60" step="0.01" id="range_mar_thresh">
             <figure class="col-auto">
               <img src="images/armed32.png" width="22" height="22" alt="less">
               <figcaption>less</figcaption>
@@ -68,14 +134,14 @@
         </div>
         <div class="custom-control custom-switch mb-1">
           <input type="checkbox" class="custom-control-input" id="showImageActivity">
-          <label class="custom-control-label" for="showImageActivity">Show camera activity</label>
+          <label class="custom-control-label" for="showImageActivity">Show camera diagnostics</label>
         </div>
         <img id="debug_image" alt=""><br>
-        <hr class="m-2">
       </div>
 
       <div id="speechSettings">
-        <h6 class="mb-2">Speech recognition</h6>
+        <hr class="m-2">
+        <h6 class="mb-2">Speech Recognition</h6>
         <div class="form-group">
           <label for="select_speech_lang">Language</label>
           <select class="custom-select custom-select-sm" id="select_speech_lang">
@@ -91,7 +157,7 @@
         </div>
         <div class="custom-control custom-switch mb-1">
           <input type="checkbox" class="custom-control-input" id="showSpeechActivity">
-          <label class="custom-control-label" for="showSpeechActivity">Show speech activity</label>
+          <label class="custom-control-label" for="showSpeechActivity">Show speech diagnostics</label>
         </div>
         <div id="speechRecognized" class="activity-label"></div>
         <div id="speechRecognizedWord"></div>

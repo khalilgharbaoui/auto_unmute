@@ -4,8 +4,18 @@
 //
 // Runs inside the hidden detector iframe injected by content_script.js.
 // Watches camera + microphone, and whenever the Meet tab is currently
-// MUTED and we observe sustained mouth movement OR recognized speech,
+// MUTED and we observe sustained mouth movement, mic activity, or recognized
+// speech (depending on the selected mode),
 // we ask the content script to flip the mic on. We never auto-mute.
+//
+// Loaded as an ES module from auto_unmute.html so we can `import` the
+// MediaPipe Face Landmarker SDK (replaces face-api.js, whose URI loader
+// is broken inside MV3 chrome-extension:// iframes).
+
+import {
+  FaceLandmarker,
+  FilesetResolver,
+} from './js/mediapipe/vision_bundle.mjs';
 
 const TICK_MS = 25;
 // Cooldown after we observe a transition into the muted state. Prevents an
@@ -15,16 +25,20 @@ const MUTE_COOLDOWN_MS = 1500;
 // Raw-audio fast path. Web Speech API has 200-500ms inherent latency before
 // onresult fires; reading raw mic level via AnalyserNode fires within one
 // audio frame (~20ms), giving sub-100ms total unmute latency.
-const AUDIO_RMS_THRESHOLD = 0.008; // ~ -42 dBFS, catches conversational voice
+// Threshold is now user-tunable via settings.audioRmsThreshold (slider in
+// popup). Default 0.005 ≈ -46 dBFS catches normal speech but may also catch
+// nearby people; users with chatty neighbors can raise it.
+const AUDIO_RMS_THRESHOLD_DEFAULT = 0.005;
 // Hold `audioActive` true for this long after RMS drops below threshold so a
 // brief inter-syllable dip ('h-i') doesn't reset the speakStreak counter.
-const AUDIO_HANGOVER_MS = 200;
+// 350ms comfortably bridges the gap between fast consecutive words.
+const AUDIO_HANGOVER_MS = 350;
 const PREVIEW_W = 320;
 const PREVIEW_H = 180;
 const CAMERA_W = 640;
 const CAMERA_H = 360;
-const FACE_DETECTOR_INPUT = 224; // multiple of 32; trade-off speed vs. accuracy
-const FACE_SCORE_THRESH = 0.5;
+// MediaPipe Face Landmarker — 478 3D landmarks, ~10ms inference on M-series.
+// We don't need blendshapes or transformation matrix; just the raw points.
 
 // Detection state machine. Two states only — we never re-mute, so there
 // is no count-down toward silence.
@@ -34,14 +48,19 @@ const settings = {
   useAutoUnmute: true,
   engine: 'engineImageSpeech',
   speakFramesRequired: 1,
-  marThreshold: 0.4,
+  // MediaPipe inner-lip MAR: ~0.05 closed, ~0.20-0.40 speaking, ~0.5+ open.
+  // 0.20 catches normal speech without false-firing on rest position.
+  marThreshold: 0.20,
+  audioRmsThreshold: AUDIO_RMS_THRESHOLD_DEFAULT,
   speechLang: 'en-US',
   cameraDeviceId: null,
   showImageActivity: true,
+  showAudioActivity: true,
   showSpeechActivity: true,
 };
 
 let imageEnabled = false;
+let audioEnabled = false;
 let speechEnabled = false;
 let muteState = 'unknown';            // 'mute' | 'unmute' | 'unknown'
 let machineState = STATE.LISTENING;
@@ -53,6 +72,7 @@ let speechActive = false;             // true between onresult and silence
 let lastRecognizedWord = '';
 let unmuteRequestInFlight = false;
 let lastMutedAt = 0;
+let diagTickCounter = 0;
 
 const PREVIEW_BUS = 'auto_unmute_preview_v1';
 const previewBus = new BroadcastChannel(PREVIEW_BUS);
@@ -64,10 +84,29 @@ const LOG = (...a) => console.log('[auto_unmute/iframe]', ...a);
 const video = document.createElement('video');
 video.autoplay = true;
 video.muted = true;
+video.playsInline = true;
 video.width = CAMERA_W;
 video.height = CAMERA_H;
-video.style.display = 'none';
+// Position offscreen rather than display:none. MediaPipe's internal pipeline
+// (even with CPU delegate) reads video frames into a canvas/WebGL texture,
+// and `display:none` videos can fail with "Framebuffer attachment has zero
+// size" because the browser may skip allocating a render surface.
+video.style.position = 'fixed';
+video.style.left = '-10000px';
+video.style.top = '0';
+video.style.width = CAMERA_W + 'px';
+video.style.height = CAMERA_H + 'px';
+video.style.opacity = '0';
+video.style.pointerEvents = 'none';
 document.body.appendChild(video);
+
+// Feed MediaPipe from a fixed-size canvas rather than the live <video> node.
+// This avoids ANGLE/WebGL readback failures we've seen in Meet tabs where the
+// SDK's internal upload path intermittently reports a zero-sized attachment.
+const frameCanvas = document.createElement('canvas');
+frameCanvas.width = CAMERA_W;
+frameCanvas.height = CAMERA_H;
+const frameCtx = frameCanvas.getContext('2d', { alpha: false });
 
 const previewCanvas = document.createElement('canvas');
 previewCanvas.width = PREVIEW_W;
@@ -85,31 +124,51 @@ function distance(a, b) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-// Mouth Aspect Ratio computed from the face-api 68-landmark mouth subset.
-// Higher value ≈ mouth more open. Returns 0 when geometry is degenerate.
-function mouthAspectRatio(mouth) {
-  const horizontal = distance(mouth[12], mouth[16]);
+// MediaPipe Face Mesh / Face Landmarker landmark indices for the inner lips:
+//   horizontal corners: 78 (left), 308 (right)
+//   vertical pairs (upper inner -> lower inner):
+//     left:   81 / 178
+//     center: 13 / 14
+//     right:  311 / 402
+// Mouth-Aspect-Ratio analogue: average vertical opening / corner distance.
+// Returns 0 when geometry is degenerate. Higher value ≈ mouth more open.
+const LM_LEFT_CORNER  = 78;
+const LM_RIGHT_CORNER = 308;
+const LM_V_PAIRS = [[81, 178], [13, 14], [311, 402]];
+
+function mouthAspectRatio(lm) {
+  if (!lm || lm.length < 478) return 0;
+  const horizontal = distance(lm[LM_LEFT_CORNER], lm[LM_RIGHT_CORNER]);
   if (horizontal <= 0.0001) return 0;
-  const v1 = distance(mouth[13], mouth[19]);
-  const v2 = distance(mouth[14], mouth[18]);
-  const v3 = distance(mouth[15], mouth[17]);
-  return (v1 + v2 + v3) / horizontal;
+  let v = 0;
+  for (const [a, b] of LM_V_PAIRS) v += distance(lm[a], lm[b]);
+  return (v / LM_V_PAIRS.length) / horizontal;
 }
 
 // ---- preview drawing (only when popup wants debug) --------------------------
 
-function drawPreview(detection, mar, speaking) {
+// MediaPipe outer-lip ring (clockwise from left corner). Used purely for the
+// debug overlay so the user can see the detector latched onto their mouth.
+const LM_OUTER_LIP = [
+  61, 146, 91, 181, 84, 17, 314, 405, 321, 375,
+  291, 409, 270, 269, 267, 0, 37, 39, 40, 185, 61,
+];
+
+function drawPreview(landmarks, mar, speaking) {
   previewCtx.drawImage(video, 0, 0, video.videoWidth || CAMERA_W,
                        video.videoHeight || CAMERA_H, 0, 0, PREVIEW_W, PREVIEW_H);
-  if (detection) {
-    const mouth = faceapi.resizeResults(detection,
-                    { width: PREVIEW_W, height: PREVIEW_H }).landmarks.getMouth();
+  if (landmarks && landmarks.length >= 478) {
     previewCtx.lineWidth = 2;
     previewCtx.strokeStyle = speaking ? '#22c55e' : '#9ca3af';
     previewCtx.beginPath();
-    previewCtx.moveTo(mouth[12].x, mouth[12].y);
-    for (let i = 13; i <= 19; i++) previewCtx.lineTo(mouth[i].x, mouth[i].y);
-    previewCtx.closePath();
+    for (let i = 0; i < LM_OUTER_LIP.length; i++) {
+      const p = landmarks[LM_OUTER_LIP[i]];
+      // Landmarks are normalized [0,1] — scale into preview canvas.
+      const x = p.x * PREVIEW_W;
+      const y = p.y * PREVIEW_H;
+      if (i === 0) previewCtx.moveTo(x, y);
+      else         previewCtx.lineTo(x, y);
+    }
     previewCtx.stroke();
   }
   // Un-flip text so it reads normally.
@@ -119,10 +178,11 @@ function drawPreview(detection, mar, speaking) {
   previewCtx.font = '16px sans-serif';
   previewCtx.lineWidth = 3;
   previewCtx.strokeStyle = '#ffffff';
-  previewCtx.fillStyle = speaking ? '#16a34a' : (detection ? '#374151' : '#dc2626');
-  const label = !detection ? 'No face'
-              : speaking   ? `Speaking (MAR ${mar.toFixed(2)})`
-                           : `Quiet (MAR ${mar.toFixed(2)})`;
+  previewCtx.fillStyle = speaking ? '#16a34a' : (landmarks ? '#374151' : '#dc2626');
+  const label = !modelsReady ? 'Loading model…'
+              : !landmarks   ? 'No face'
+              : speaking     ? `Speaking (MAR ${mar.toFixed(2)})`
+                             : `Quiet (MAR ${mar.toFixed(2)})`;
   previewCtx.strokeText(label, 8, 22);
   previewCtx.fillText(label, 8, 22);
   previewCtx.restore();
@@ -138,12 +198,26 @@ async function startCamera() {
   await stopCamera();
   const video_constraints = { width: CAMERA_W, height: CAMERA_H };
   if (settings.cameraDeviceId) video_constraints.deviceId = settings.cameraDeviceId;
+  LOG('startCamera requesting', video_constraints);
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: false, video: video_constraints,
     });
     cameraStream = stream;
     video.srcObject = stream;
+    try {
+      await video.play();
+      LOG('video.play ok');
+    } catch (err) {
+      console.warn('[auto_unmute] video.play failed:', err);
+    }
+    const t = stream.getVideoTracks()[0];
+    LOG('startCamera ok track', t && t.label, 'settings', t && t.getSettings());
+    video.addEventListener('loadedmetadata', () => {
+      LOG('video loadedmetadata size',
+          video.videoWidth + 'x' + video.videoHeight,
+          'readyState', video.readyState);
+    }, { once: true });
     if (!settings.cameraDeviceId) {
       const id = stream.getVideoTracks()[0]?.getSettings().deviceId || null;
       if (id) {
@@ -175,7 +249,10 @@ let audioCtx = null;
 let audioProcessor = null;
 let audioSource = null;
 let audioActive = false;
-let lastAudioRms = 0;       // peak RMS observed since the last tick read
+let lastAudioRms = 0;       // peak RMS from the previous tick window (for logs)
+let audioPeakSinceTick = 0; // running peak the processor updates in real time
+let displayPeakRms = 0;     // peak across the entire popup-push window (~100ms)
+let displayActiveAny = false; // true if audioActive was true anywhere in window
 let lastAboveThresholdAt = 0;
 
 async function startAudioLevel() {
@@ -208,9 +285,9 @@ async function startAudioLevel() {
       const rms = Math.sqrt(sumSq / data.length);
       // Track peak across all buffers since the tick last read it, so a
       // single quiet frame can't mask a loud one.
-      if (rms > lastAudioRms) lastAudioRms = rms;
+      if (rms > audioPeakSinceTick) audioPeakSinceTick = rms;
       const now = Date.now();
-      if (rms > AUDIO_RMS_THRESHOLD) {
+      if (rms > settings.audioRmsThreshold) {
         lastAboveThresholdAt = now;
         audioActive = true;
       } else if (audioActive && (now - lastAboveThresholdAt) >= AUDIO_HANGOVER_MS) {
@@ -237,6 +314,9 @@ async function startAudioLevel() {
 async function stopAudioLevel() {
   audioActive = false;
   lastAudioRms = 0;
+  audioPeakSinceTick = 0;
+  displayPeakRms = 0;
+  displayActiveAny = false;
   if (audioProcessor) {
     try { audioProcessor.disconnect(); } catch (_e) { /* noop */ }
     audioProcessor.onaudioprocess = null;
@@ -257,10 +337,15 @@ async function stopAudioLevel() {
 }
 
 // The script-processor callback updates audioActive in real time, so the
-// per-tick poll only needs to reset the running peak so the next tick window
-// reflects only fresh audio.
+// per-tick poll only needs to snapshot the running peak (so logs see real
+// numbers) and reset it for the next window. We also accumulate the peak
+// across the entire popup-display window (~100ms) so the meter never
+// misses a syllable that landed between display pushes.
 function sampleAudioLevel() {
-  lastAudioRms = 0;
+  lastAudioRms = audioPeakSinceTick;
+  if (lastAudioRms > displayPeakRms) displayPeakRms = lastAudioRms;
+  if (audioActive) displayActiveAny = true;
+  audioPeakSinceTick = 0;
 }
 
 // ---- Web Speech API ---------------------------------------------------------
@@ -338,23 +423,24 @@ function stopSpeech() {
 
 function applyEngineFlags() {
   const prevImage = imageEnabled;
+  const prevAudio = audioEnabled;
   const prevSpeech = speechEnabled;
   if (settings.useAutoUnmute) {
     imageEnabled  = settings.engine === 'engineImage'  || settings.engine === 'engineImageSpeech';
-    speechEnabled = settings.engine === 'engineSpeech' || settings.engine === 'engineImageSpeech';
+    audioEnabled  = settings.engine === 'engineSpeech' || settings.engine === 'engineImageSpeech';
+    speechEnabled = settings.engine === 'engineRecognition'
+                 || settings.engine === 'engineImageSpeech';
   } else {
     imageEnabled = false;
+    audioEnabled = false;
     speechEnabled = false;
   }
   if (imageEnabled  && !prevImage)  startCamera();
   if (!imageEnabled &&  prevImage)  stopCamera();
   if (speechEnabled && !prevSpeech) startSpeech();
   if (!speechEnabled &&  prevSpeech) stopSpeech();
-  // Always-on raw-audio fast path whenever auto-unmute is enabled. It's the
-  // lowest-latency signal (sub-50ms) and is what actually triggers most
-  // unmutes in practice.
-  if (settings.useAutoUnmute) startAudioLevel();
-  else                        stopAudioLevel();
+  if (audioEnabled && !prevAudio) startAudioLevel();
+  if (!audioEnabled &&  prevAudio) stopAudioLevel();
 }
 
 // ---- mute-state sync from content script (relayed by background) -----------
@@ -427,42 +513,90 @@ function pushSpeechActivityToPopup() {
   }, () => { void chrome.runtime.lastError; });
 }
 
+// Audio level meter — push the peak RMS observed across the entire window
+// (~100ms) to the popup ~10Hz so a syllable landing between pushes never
+// gets thrown away. Gated on popupOpen + showAudioActivity.
+let audioLevelTickCounter = 0;
+function pushAudioLevelToPopup() {
+  if (!popupOpen || !settings.showAudioActivity || !audioEnabled) return;
+  // tick is 25ms; emit every 4th tick = ~100ms = 10 fps, smooth + cheap.
+  audioLevelTickCounter = (audioLevelTickCounter + 1) % 4;
+  if (audioLevelTickCounter !== 0) return;
+  chrome.runtime.sendMessage({
+    action: 'audio_level',
+    rms: displayPeakRms,
+    active: displayActiveAny,
+    threshold: settings.audioRmsThreshold,
+  }, () => { void chrome.runtime.lastError; });
+  displayPeakRms = 0;
+  displayActiveAny = false;
+}
+
 // ---- main loop --------------------------------------------------------------
 
-async function loadModels() {
-  // Trailing slash matters: face-api resolves shard filenames in the weights
-  // manifest as relative URLs against this base, so without it the resolution
-  // strips the 'models/' segment and shard fetches 404.
-  const modelsUrl = chrome.runtime.getURL('models/');
-  LOG('loading face-api models from', modelsUrl);
+let faceLandmarker = null;
 
-  // Probe both the manifest AND the shard so we see exactly which one fails.
-  const manifestUrl = modelsUrl + 'tiny_face_detector_model-weights_manifest.json';
-  const shardUrl    = modelsUrl + 'tiny_face_detector_model-shard1';
-  try {
-    const m = await fetch(manifestUrl);
-    LOG('manifest probe', m.status, m.url);
-    if (!m.ok) throw new Error('manifest HTTP ' + m.status);
-    const s = await fetch(shardUrl);
-    LOG('shard probe', s.status, s.url, 'bytes=', (await s.arrayBuffer()).byteLength);
-    if (!s.ok) throw new Error('shard HTTP ' + s.status);
-  } catch (err) {
-    console.warn('[auto_unmute] model probe failed:', err);
-    return;
+// Extract a useful description from whatever a failed loader throws. Emscripten
+// rejects with a bare DOM Event whose String() is "[object Event]"; we want
+// the original network/script-tag error visible in the console.
+function describeLoadError(err) {
+  if (!err) return 'unknown';
+  if (err instanceof Error) return `${err.name}: ${err.message}`;
+  if (typeof err === 'string') return err;
+  if (err instanceof Event) {
+    const t = err.target;
+    const src = t && (t.src || t.href || t.responseURL);
+    return `${err.type} on <${(t && t.tagName) || '?'}>${src ? ' src=' + src : ''}`;
   }
+  try { return JSON.stringify(err); } catch (_e) { return String(err); }
+}
+
+async function probe(url) {
+  try {
+    const r = await fetch(url, { method: 'HEAD' });
+    return `${r.status} ${r.headers.get('content-type') || '?'}`;
+  } catch (e) {
+    return `fetch failed: ${e.message}`;
+  }
+}
+
+async function loadModels() {
+  const wasmBase = chrome.runtime.getURL('js/mediapipe/wasm/');
+  const modelUrl = chrome.runtime.getURL('models/face_landmarker.task');
+  LOG('loading MediaPipe FaceLandmarker', { wasmBase, modelUrl });
+  // Probe the three files MediaPipe will try to load so we can tell at a glance
+  // whether the failure is network (404 / bad MIME) or runtime (script error).
+  LOG('probe loader.js  ->', await probe(wasmBase + 'vision_wasm_internal.js'));
+  LOG('probe wasm       ->', await probe(wasmBase + 'vision_wasm_internal.wasm'));
+  LOG('probe model.task ->', await probe(modelUrl));
 
   try {
-    await Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromUri(modelsUrl),
-      faceapi.nets.faceLandmark68TinyNet.loadFromUri(modelsUrl),
-    ]);
+    const fileset = await FilesetResolver.forVisionTasks(wasmBase);
+    LOG('FilesetResolver ready, creating FaceLandmarker…');
+    faceLandmarker = await FaceLandmarker.createFromOptions(fileset, {
+      baseOptions: {
+        modelAssetPath: modelUrl,
+        // CPU is plenty for 1 face at ~25fps; GPU adds a WebGL context that
+        // we don't need and that can conflict with Meet's own renderer.
+        delegate: 'CPU',
+      },
+      runningMode: 'VIDEO',
+      numFaces: 1,
+      // Meet tiles are often a bit soft / low-contrast at 640x360. The
+      // default 0.5 thresholds were too strict in testing and could return no
+      // face at all even with a centered user, so relax them slightly.
+      minFaceDetectionConfidence: 0.3,
+      minFacePresenceConfidence: 0.3,
+      minTrackingConfidence: 0.3,
+      // We use raw landmarks for MAR; skip the heavier blendshape branch.
+      outputFaceBlendshapes: false,
+      outputFacialTransformationMatrixes: false,
+    });
     modelsReady = true;
-    LOG('face-api models ready');
+    LOG('MediaPipe FaceLandmarker ready');
   } catch (err) {
-    // face-api's internal HTTP loader is incompatible with chrome-extension://
-    // in MV3 even though raw fetch() works (probes succeed). Audio + speech
-    // engines are sufficient on their own; mouth-movement is a nice-to-have.
-    console.warn('[auto_unmute] face-api unavailable (audio+speech still active):', err);
+    console.warn('[auto_unmute] MediaPipe load failed (audio modes still active):',
+                 describeLoadError(err), err);
   }
 }
 
@@ -473,22 +607,51 @@ async function tick() {
   sampleAudioLevel();
 
   let mar = 0;
-  let detection = null;
-  if (imageEnabled && modelsReady && cameraStream && video.readyState >= 2) {
-    detection = await faceapi.detectSingleFace(
-      video,
-      new faceapi.TinyFaceDetectorOptions({
-        inputSize: FACE_DETECTOR_INPUT,
-        scoreThreshold: FACE_SCORE_THRESH,
-      })
-    ).withFaceLandmarks(/* useTinyModel */ true);
-    if (detection) {
-      mar = mouthAspectRatio(detection.landmarks.getMouth());
+  let landmarks = null;
+  let detectFaces = -1; // -1 = didn't run; 0..n = number of faces returned
+  if (imageEnabled && modelsReady && faceLandmarker && frameCtx && cameraStream
+      && video.readyState >= 2
+      && video.videoWidth > 0 && video.videoHeight > 0) {
+    frameCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight,
+                       0, 0, CAMERA_W, CAMERA_H);
+    // detectForVideo wants a monotonically increasing timestamp in ms.
+    const result = faceLandmarker.detectForVideo(frameCanvas, performance.now());
+    detectFaces = (result && result.faceLandmarks) ? result.faceLandmarks.length : 0;
+    if (detectFaces > 0) {
+      landmarks = result.faceLandmarks[0];
+      mar = mouthAspectRatio(landmarks);
+    }
+  }
+
+  // Diagnostic: when image engine is on but we're not getting MAR, log every
+  // ~500ms why. Helps users (and us) tell apart "no camera" from "no face" from
+  // "mouth closed". Throttled so it doesn't flood the console.
+  if (imageEnabled) {
+    diagTickCounter = (diagTickCounter + 1) % 20; // 20 * 25ms = 500ms
+    if (diagTickCounter === 0) {
+      let frameSample = 'n/a';
+      if (frameCtx && cameraStream && video.readyState >= 2
+          && video.videoWidth > 0 && video.videoHeight > 0) {
+        frameCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight,
+                           0, 0, CAMERA_W, CAMERA_H);
+        const px = frameCtx.getImageData((CAMERA_W / 2) | 0, (CAMERA_H / 2) | 0, 1, 1).data;
+        frameSample = `${px[0]}/${px[1]}/${px[2]}`;
+      }
+      LOG('image-diag',
+          'modelsReady', modelsReady,
+          'cameraStream', !!cameraStream,
+          'paused', video.paused,
+          't', video.currentTime.toFixed(2),
+          'readyState', video.readyState,
+          'videoSize', video.videoWidth + 'x' + video.videoHeight,
+          'sample', frameSample,
+          'detectFaces', detectFaces,
+          'mar', mar.toFixed(3));
     }
   }
 
   const mouthOpen = imageEnabled && mar > settings.marThreshold;
-  const speaking = audioActive
+  const speaking = (audioEnabled && audioActive)
                 || mouthOpen
                 || (speechEnabled && speechActive);
 
@@ -503,7 +666,8 @@ async function tick() {
       speakStreak += 1;
       LOG('speakStreak', speakStreak, '/', settings.speakFramesRequired,
           'rms', lastAudioRms.toFixed(3), 'audioActive', audioActive,
-          'mar', mar.toFixed(2), 'mouthOpen', mouthOpen, 'speechActive', speechActive);
+          'mar', mar.toFixed(2), 'mouthOpen', mouthOpen,
+          'speechActive', speechActive);
       if (speakStreak >= settings.speakFramesRequired && !unmuteRequestInFlight) {
         unmuteRequestInFlight = true;
         LOG('-> request_unmute');
@@ -525,9 +689,10 @@ async function tick() {
   // STATE.UNMUTED -> deliberately do nothing. We never re-mute.
 
   if (popupOpen && settings.showImageActivity && imageEnabled) {
-    drawPreview(detection, mar, mouthOpen);
+    drawPreview(landmarks, mar, mouthOpen);
   }
   pushSpeechActivityToPopup();
+  pushAudioLevelToPopup();
 }
 
 // ---- bootstrap --------------------------------------------------------------
@@ -537,7 +702,7 @@ chrome.storage.sync.get(Object.keys(settings), (data) => {
     if (data[k] !== undefined) settings[k] = data[k];
   }
   // Migration: older versions defaulted speakFramesRequired to 2, which felt
-  // sluggish with the new 50ms tick + audio fast path. Cap it at 1 if the
+  // sluggish with the new 25ms tick + audio fast path. Cap it at 1 if the
   // user never explicitly raised it (i.e. it's still the legacy default).
   if (settings.speakFramesRequired === 2) {
     settings.speakFramesRequired = 1;

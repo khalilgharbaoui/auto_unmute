@@ -9,11 +9,16 @@
 
 const DEFAULTS = {
   useAutoUnmute: true,
-  engine: 'engineImageSpeech',          // engineImageSpeech | engineImage | engineSpeech
-  speakFramesRequired: 2,               // ~400ms at 200ms tick
-  marThreshold: 0.4,                    // mouth-aspect-ratio open threshold
+  // engineSpeech=audio only | engineImage=camera only |
+  // engineRecognition=speech recognition only |
+  // engineImageSpeech=audio + camera + speech recognition
+  engine: 'engineImageSpeech',
+  speakFramesRequired: 1,
+  marThreshold: 0.20,
+  audioRmsThreshold: 0.005,
   speechLang: 'en-US',
   cameraDeviceId: null,
+  showAudioActivity: true,
   showImageActivity: true,
   showSpeechActivity: true,
 };
