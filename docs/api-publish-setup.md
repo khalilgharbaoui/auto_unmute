@@ -31,15 +31,16 @@ Your browser will open the Google consent screen. Sign in with the Google accoun
 
 ### 3. First-time item creation
 
-The Web Store API can update an existing item but the very first item still needs an extension ID. Create it once:
+The `chrome-webstore-upload-cli` only **updates** existing items, so the very first item must be created via the raw API. This repo ships a helper:
 
 ```bash
-# This uses the chrome-webstore-upload-cli's "insert" path:
-npx chrome-webstore-upload-cli@3 upload \
-  --source dist/auto_unmute-1.0.0.zip \
-  --client-id <your-client-id> \
-  --client-secret <your-client-secret> \
-  --refresh-token <refresh-token>
+# build the ZIP first if you haven't:
+bash scripts/build-zip.sh
+
+CLIENT_ID=<your-client-id> \
+CLIENT_SECRET=<your-client-secret> \
+REFRESH_TOKEN=<your-refresh-token> \
+node scripts/create-cws-item.mjs dist/auto_unmute-1.0.0.zip
 ```
 
 It prints the new **extension ID** (32-char string). Save it.
