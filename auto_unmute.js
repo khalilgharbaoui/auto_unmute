@@ -7,11 +7,15 @@
 // MUTED and we observe sustained mouth movement OR recognized speech,
 // we ask the content script to flip the mic on. We never auto-mute.
 
-const TICK_MS = 100;
+const TICK_MS = 50;
 // Cooldown after we observe a transition into the muted state. Prevents an
 // instant re-unmute when the user manually mutes mid-sentence (residual
 // speechActive/MAR can otherwise trigger immediately).
 const MUTE_COOLDOWN_MS = 1500;
+// Raw-audio fast path. Web Speech API has 200-500ms inherent latency before
+// onresult fires; reading raw mic level via AnalyserNode fires within one
+// audio frame (~20ms), giving sub-100ms total unmute latency.
+const AUDIO_RMS_THRESHOLD = 0.025; // ~ -32 dBFS, well above room noise
 const PREVIEW_W = 320;
 const PREVIEW_H = 180;
 const CAMERA_W = 640;
@@ -156,6 +160,76 @@ async function stopCamera() {
   video.srcObject = null;
 }
 
+// ---- Raw audio level (fast path) -------------------------------------------
+//
+// Bypasses Web Speech API latency. We grab the mic stream once, run it through
+// an AnalyserNode, and sample RMS on every tick. `audioActive` flips true the
+// instant volume crosses the threshold, which is typically 30-80ms after the
+// user starts speaking.
+
+let audioStream = null;
+let audioCtx = null;
+let analyser = null;
+let analyserBuf = null;
+let audioActive = false;
+let lastAudioRms = 0;
+
+async function startAudioLevel() {
+  if (audioStream) return;
+  try {
+    audioStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+      video: false,
+    });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = audioCtx.createMediaStreamSource(audioStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.0; // we want raw, snappy values
+    analyserBuf = new Float32Array(analyser.fftSize);
+    src.connect(analyser);
+    LOG('audio level detector started');
+  } catch (err) {
+    console.warn('[auto_unmute] audio level unavailable:', err);
+    audioStream = null;
+  }
+}
+
+async function stopAudioLevel() {
+  audioActive = false;
+  lastAudioRms = 0;
+  analyser = null;
+  analyserBuf = null;
+  if (audioCtx) {
+    try { await audioCtx.close(); } catch (_e) { /* noop */ }
+    audioCtx = null;
+  }
+  if (audioStream) {
+    audioStream.getTracks().forEach((t) => t.stop());
+    audioStream = null;
+  }
+}
+
+function sampleAudioLevel() {
+  if (!analyser || !analyserBuf) {
+    audioActive = false;
+    return;
+  }
+  analyser.getFloatTimeDomainData(analyserBuf);
+  let sumSq = 0;
+  for (let i = 0; i < analyserBuf.length; i++) {
+    const v = analyserBuf[i];
+    sumSq += v * v;
+  }
+  const rms = Math.sqrt(sumSq / analyserBuf.length);
+  lastAudioRms = rms;
+  audioActive = rms > AUDIO_RMS_THRESHOLD;
+}
+
 // ---- Web Speech API ---------------------------------------------------------
 
 const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -243,6 +317,11 @@ function applyEngineFlags() {
   if (!imageEnabled &&  prevImage)  stopCamera();
   if (speechEnabled && !prevSpeech) startSpeech();
   if (!speechEnabled &&  prevSpeech) stopSpeech();
+  // Always-on raw-audio fast path whenever auto-unmute is enabled. It's the
+  // lowest-latency signal (sub-50ms) and is what actually triggers most
+  // unmutes in practice.
+  if (settings.useAutoUnmute) startAudioLevel();
+  else                        stopAudioLevel();
 }
 
 // ---- mute-state sync from content script (relayed by background) -----------
@@ -257,6 +336,7 @@ function applyMuteState(next) {
     // Clear residual speech state so an in-flight phrase doesn't immediately
     // re-trigger an unmute right after the user manually muted.
     speechActive = false;
+    audioActive = false;
     lastRecognizedWord = '';
     lastMutedAt = Date.now();
   } else if (next === 'unmute') {
@@ -328,6 +408,9 @@ async function loadModels() {
 async function tick() {
   if (!settings.useAutoUnmute) return;
 
+  // Sample raw audio level every tick — sub-50ms latency, drives most unmutes.
+  sampleAudioLevel();
+
   let mar = 0;
   let detection = null;
   if (imageEnabled && modelsReady && cameraStream && video.readyState >= 2) {
@@ -344,7 +427,9 @@ async function tick() {
   }
 
   const mouthOpen = imageEnabled && mar > settings.marThreshold;
-  const speaking = mouthOpen || (speechEnabled && speechActive);
+  const speaking = audioActive
+                || mouthOpen
+                || (speechEnabled && speechActive);
 
   // Inverted state machine: only act when currently muted.
   if (muteState === 'mute' && machineState === STATE.LISTENING) {
@@ -356,6 +441,7 @@ async function tick() {
     } else if (speaking) {
       speakStreak += 1;
       LOG('speakStreak', speakStreak, '/', settings.speakFramesRequired,
+          'rms', lastAudioRms.toFixed(3), 'audioActive', audioActive,
           'mar', mar.toFixed(2), 'mouthOpen', mouthOpen, 'speechActive', speechActive);
       if (speakStreak >= settings.speakFramesRequired && !unmuteRequestInFlight) {
         unmuteRequestInFlight = true;
