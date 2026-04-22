@@ -1,0 +1,15 @@
+# build output
+dist/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Node (in case anyone adds tooling later)
+node_modules/
+npm-debug.log*

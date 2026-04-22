@@ -1,0 +1,37 @@
+name: Build release ZIP
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version from manifest
+        id: ver
+        run: echo "version=$(node -e "console.log(require('./manifest.json').version)")" >> "$GITHUB_OUTPUT"
+
+      - name: Build ZIP
+        run: bash scripts/build-zip.sh
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto_unmute-${{ steps.ver.outputs.version }}
+          path: dist/auto_unmute-${{ steps.ver.outputs.version }}.zip
+          if-no-files-found: error
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/auto_unmute-${{ steps.ver.outputs.version }}.zip
+          generate_release_notes: true

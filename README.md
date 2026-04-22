@@ -19,7 +19,11 @@ The detection loop runs every 200 ms. Default sustained-speech requirement is 2 
 
 - Google Chrome (or any Chromium-based browser) recent enough to support **Manifest V3** and the **Web Speech API** (Chrome 88+).
 
-## Installation (load unpacked)
+## Install from the Chrome Web Store
+
+Coming soon — currently in review. Watch [Releases](https://github.com/khalilgharbaoui/auto_unmute/releases) for the listing URL.
+
+## Installation (load unpacked, today)
 
 1. Clone or download this repository to your computer.
 2. Open `chrome://extensions` and enable **Developer mode** (top-right toggle).
@@ -78,3 +82,20 @@ MIT, with thanks to:
 - [Bootstrap](https://github.com/twbs/bootstrap) — popup styling.
 
 See [`LICENSE`](./LICENSE).
+
+## Building a release ZIP
+
+```bash
+bash scripts/build-zip.sh
+# → dist/auto_unmute-<version>.zip   (upload this to the Chrome Web Store)
+```
+
+Or push a git tag and the [GitHub Action](.github/workflows/release.yml) will build the ZIP and attach it to a GitHub Release automatically:
+
+```bash
+git tag v1.0.1 && git push --tags
+```
+
+## Privacy
+
+The extension does not collect, transmit, or store any user data. Full policy: [`docs/privacy.md`](./docs/privacy.md) (also published at https://khalilgharbaoui.github.io/auto_unmute/privacy.html once GitHub Pages is enabled).

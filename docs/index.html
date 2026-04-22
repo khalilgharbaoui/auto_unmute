@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Auto Unmute for Google Meet</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         max-width: 760px; margin: 2.5em auto; padding: 0 1em; color: #222; }
+  h1 { font-size: 2em; margin-bottom: .2em; }
+  .lede { color: #4b5563; font-size: 1.1em; }
+  a.btn { display: inline-block; background: #2563eb; color: #fff; padding: .6em 1.1em;
+          border-radius: 6px; text-decoration: none; margin: .3em .3em 0 0; }
+  a.btn.alt { background: #111827; }
+  code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<h1>Auto Unmute for Google Meet</h1>
+<p class="lede">Forgot you were muted? Auto Unmute detects when you start talking and turns your mic back on automatically.</p>
+
+<p>
+  <a class="btn" href="https://github.com/khalilgharbaoui/auto_unmute">Source on GitHub</a>
+  <a class="btn alt" href="./privacy.html">Privacy Policy</a>
+</p>
+
+<h2>How it works</h2>
+<ul>
+  <li>Watches your camera for mouth movement (via <a href="https://github.com/justadudewhohacks/face-api.js">face-api.js</a>) and your microphone for recognised speech (via the Web Speech API).</li>
+  <li>When you have been talking for ~400 ms while muted, it dispatches the same <code>Ctrl+D</code> / <code>⌘+D</code> shortcut you would press yourself.</li>
+  <li>Never re-mutes you on its own. Only you decide when to mute again.</li>
+  <li>100% local. No data leaves your browser.</li>
+</ul>
+
+<h2>Install</h2>
+<p>Coming to the Chrome Web Store. In the meantime, see the README on GitHub for "load unpacked" install instructions.</p>
+</body>
+</html>
