@@ -54,7 +54,7 @@ let lastMutedAt = 0;
 const PREVIEW_BUS = 'auto_unmute_preview_v1';
 const previewBus = new BroadcastChannel(PREVIEW_BUS);
 
-const LOG = (...a) => console.debug('[auto_unmute/iframe]', ...a);
+const LOG = (...a) => console.log('[auto_unmute/iframe]', ...a);
 
 // ---- video & canvas ---------------------------------------------------------
 
@@ -402,17 +402,22 @@ async function loadModels() {
   // strips the 'models/' segment and shard fetches 404.
   const modelsUrl = chrome.runtime.getURL('models/');
   LOG('loading face-api models from', modelsUrl);
-  // Probe one weights manifest first so we get a useful error if the resource
-  // isn't actually accessible (CSP / web_accessible_resources mismatch).
-  const probeUrl = modelsUrl + 'tiny_face_detector_model-weights_manifest.json';
+
+  // Probe both the manifest AND the shard so we see exactly which one fails.
+  const manifestUrl = modelsUrl + 'tiny_face_detector_model-weights_manifest.json';
+  const shardUrl    = modelsUrl + 'tiny_face_detector_model-shard1';
   try {
-    const probe = await fetch(probeUrl);
-    LOG('models probe', probe.status, probe.url);
-    if (!probe.ok) throw new Error('probe HTTP ' + probe.status);
+    const m = await fetch(manifestUrl);
+    LOG('manifest probe', m.status, m.url);
+    if (!m.ok) throw new Error('manifest HTTP ' + m.status);
+    const s = await fetch(shardUrl);
+    LOG('shard probe', s.status, s.url, 'bytes=', (await s.arrayBuffer()).byteLength);
+    if (!s.ok) throw new Error('shard HTTP ' + s.status);
   } catch (err) {
-    console.warn('[auto_unmute] model probe failed for', probeUrl, err);
+    console.warn('[auto_unmute] model probe failed:', err);
     return;
   }
+
   try {
     await Promise.all([
       faceapi.nets.tinyFaceDetector.loadFromUri(modelsUrl),
@@ -422,6 +427,22 @@ async function loadModels() {
     LOG('face-api models ready');
   } catch (err) {
     console.warn('[auto_unmute] face-api loadFromUri failed:', err);
+    // Fallback: fetch shard binaries ourselves and inject directly. Face-api
+    // exposes `load(buffer)` on each NeuralNetwork which accepts a raw weights
+    // ArrayBuffer (the manifest is required to derive layout, so we use
+    // `loadWeights` style: fetch -> Uint8Array -> nets.X.load(uint8)).
+    try {
+      const [tinyBuf, landmarkBuf] = await Promise.all([
+        fetch(modelsUrl + 'tiny_face_detector_model-shard1').then((r) => r.arrayBuffer()),
+        fetch(modelsUrl + 'face_landmark_68_tiny_model-shard1').then((r) => r.arrayBuffer()),
+      ]);
+      await faceapi.nets.tinyFaceDetector.load(new Uint8Array(tinyBuf));
+      await faceapi.nets.faceLandmark68TinyNet.load(new Uint8Array(landmarkBuf));
+      modelsReady = true;
+      LOG('face-api models ready (manual buffer load)');
+    } catch (err2) {
+      console.warn('[auto_unmute] manual buffer load also failed:', err2);
+    }
   }
 }
 
