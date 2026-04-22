@@ -7,7 +7,11 @@
 // MUTED and we observe sustained mouth movement OR recognized speech,
 // we ask the content script to flip the mic on. We never auto-mute.
 
-const TICK_MS = 200;
+const TICK_MS = 100;
+// Cooldown after we observe a transition into the muted state. Prevents an
+// instant re-unmute when the user manually mutes mid-sentence (residual
+// speechActive/MAR can otherwise trigger immediately).
+const MUTE_COOLDOWN_MS = 1500;
 const PREVIEW_W = 320;
 const PREVIEW_H = 180;
 const CAMERA_W = 640;
@@ -22,7 +26,7 @@ const STATE = Object.freeze({ LISTENING: 'listening', UNMUTED: 'unmuted' });
 const settings = {
   useAutoUnmute: true,
   engine: 'engineImageSpeech',
-  speakFramesRequired: 2,
+  speakFramesRequired: 1,
   marThreshold: 0.4,
   speechLang: 'en-US',
   cameraDeviceId: null,
@@ -41,6 +45,7 @@ let modelsReady = false;
 let speechActive = false;             // true between onresult and silence
 let lastRecognizedWord = '';
 let unmuteRequestInFlight = false;
+let lastMutedAt = 0;
 
 const PREVIEW_BUS = 'auto_unmute_preview_v1';
 const previewBus = new BroadcastChannel(PREVIEW_BUS);
@@ -249,6 +254,11 @@ function applyMuteState(next) {
   if (next === 'mute') {
     machineState = STATE.LISTENING;
     speakStreak = 0;
+    // Clear residual speech state so an in-flight phrase doesn't immediately
+    // re-trigger an unmute right after the user manually muted.
+    speechActive = false;
+    lastRecognizedWord = '';
+    lastMutedAt = Date.now();
   } else if (next === 'unmute') {
     machineState = STATE.UNMUTED;
     speakStreak = 0;
@@ -338,7 +348,12 @@ async function tick() {
 
   // Inverted state machine: only act when currently muted.
   if (muteState === 'mute' && machineState === STATE.LISTENING) {
-    if (speaking) {
+    const sinceMute = Date.now() - lastMutedAt;
+    if (sinceMute < MUTE_COOLDOWN_MS) {
+      // In post-mute cooldown — ignore any speech so a freshly-pressed mute
+      // doesn't get instantly undone by leftover audio.
+      speakStreak = 0;
+    } else if (speaking) {
       speakStreak += 1;
       LOG('speakStreak', speakStreak, '/', settings.speakFramesRequired,
           'mar', mar.toFixed(2), 'mouthOpen', mouthOpen, 'speechActive', speechActive);
