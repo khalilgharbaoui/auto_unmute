@@ -7,7 +7,7 @@
 // MUTED and we observe sustained mouth movement OR recognized speech,
 // we ask the content script to flip the mic on. We never auto-mute.
 
-const TICK_MS = 50;
+const TICK_MS = 25;
 // Cooldown after we observe a transition into the muted state. Prevents an
 // instant re-unmute when the user manually mutes mid-sentence (residual
 // speechActive/MAR can otherwise trigger immediately).
@@ -15,7 +15,7 @@ const MUTE_COOLDOWN_MS = 1500;
 // Raw-audio fast path. Web Speech API has 200-500ms inherent latency before
 // onresult fires; reading raw mic level via AnalyserNode fires within one
 // audio frame (~20ms), giving sub-100ms total unmute latency.
-const AUDIO_RMS_THRESHOLD = 0.025; // ~ -32 dBFS, well above room noise
+const AUDIO_RMS_THRESHOLD = 0.008; // ~ -42 dBFS, catches conversational voice
 // Hold `audioActive` true for this long after RMS drops below threshold so a
 // brief inter-syllable dip ('h-i') doesn't reset the speakStreak counter.
 const AUDIO_HANGOVER_MS = 200;
