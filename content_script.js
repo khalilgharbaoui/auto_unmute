@@ -14,6 +14,30 @@ const LOG = (...a) => console.debug('[auto_unmute/cs]', ...a);
 const isMac = navigator.platform.toUpperCase().includes('MAC');
 let micButton = null;
 let lastReportedState = 'unknown'; // 'mute' | 'unmute' | 'unknown'
+let micObserver = null;
+let pageObserver = null;
+let contextValid = true;
+
+// Detect the "extension context invalidated" race: when the user reloads the
+// extension, this orphaned content script keeps running but chrome.runtime is
+// gone. Tear down our listeners so we stop spamming the console.
+function isCtxAlive() {
+  if (!contextValid) return false;
+  try {
+    if (!chrome || !chrome.runtime || !chrome.runtime.id) {
+      throw new Error('no runtime');
+    }
+    return true;
+  } catch (_e) {
+    contextValid = false;
+    LOG('extension context invalidated; tearing down');
+    try { micObserver && micObserver.disconnect(); } catch (_e2) { /* noop */ }
+    try { pageObserver && pageObserver.disconnect(); } catch (_e2) { /* noop */ }
+    micObserver = null;
+    pageObserver = null;
+    return false;
+  }
+}
 
 function readMuteState() {
   if (!micButton) return 'unknown';
@@ -32,13 +56,19 @@ function readMuteState() {
 }
 
 function broadcastMuteState(force = false) {
+  if (!isCtxAlive()) return;
   const s = readMuteState();
   if (!force && s === lastReportedState) return;
   lastReportedState = s;
   LOG('mute_state ->', s);
-  chrome.runtime.sendMessage({ action: 'mute_state', isMuted: s }, () => {
-    void chrome.runtime.lastError;
-  });
+  try {
+    chrome.runtime.sendMessage({ action: 'mute_state', isMuted: s }, () => {
+      void chrome.runtime.lastError;
+    });
+  } catch (_e) {
+    // Context died between the guard and the call; swallow.
+    contextValid = false;
+  }
 }
 
 function clickMicButton() {
@@ -79,9 +109,9 @@ function bindMicButton(el) {
   });
   // Also observe attribute mutations so we catch programmatic flips
   // (Meet sometimes updates state without a click event).
-  new MutationObserver(() => broadcastMuteState())
-    .observe(el, { attributes: true,
-                   attributeFilter: ['data-is-muted', 'aria-pressed', 'aria-label'] });
+  micObserver = new MutationObserver(() => broadcastMuteState());
+  micObserver.observe(el, { attributes: true,
+                 attributeFilter: ['data-is-muted', 'aria-pressed', 'aria-label'] });
   broadcastMuteState(true);
 }
 
@@ -108,7 +138,11 @@ const findAndBindMicButton = () => {
   bindMicButton(preferred);
 };
 
-const domObserver = new MutationObserver(findAndBindMicButton);
+const domObserver = new MutationObserver(() => {
+  if (!isCtxAlive()) { try { domObserver.disconnect(); } catch (_e) { /* noop */ } return; }
+  findAndBindMicButton();
+});
+pageObserver = domObserver;
 domObserver.observe(document.documentElement, { childList: true, subtree: true });
 findAndBindMicButton();
 

@@ -401,20 +401,25 @@ async function loadModels() {
   LOG('loading face-api models from', modelsUrl);
   // Probe one weights manifest first so we get a useful error if the resource
   // isn't actually accessible (CSP / web_accessible_resources mismatch).
+  const probeUrl = modelsUrl + '/tiny_face_detector_model-weights_manifest.json';
   try {
-    const probe = await fetch(modelsUrl + '/tiny_face_detector_model-weights_manifest.json');
+    const probe = await fetch(probeUrl);
     LOG('models probe', probe.status, probe.url);
     if (!probe.ok) throw new Error('probe HTTP ' + probe.status);
   } catch (err) {
-    console.warn('[auto_unmute] model probe failed:', err);
+    console.warn('[auto_unmute] model probe failed for', probeUrl, err);
     return;
   }
-  await Promise.all([
-    faceapi.nets.tinyFaceDetector.loadFromUri(modelsUrl),
-    faceapi.nets.faceLandmark68TinyNet.loadFromUri(modelsUrl),
-  ]);
-  modelsReady = true;
-  LOG('face-api models ready');
+  try {
+    await Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(modelsUrl),
+      faceapi.nets.faceLandmark68TinyNet.loadFromUri(modelsUrl),
+    ]);
+    modelsReady = true;
+    LOG('face-api models ready');
+  } catch (err) {
+    console.warn('[auto_unmute] face-api loadFromUri failed:', err);
+  }
 }
 
 async function tick() {
