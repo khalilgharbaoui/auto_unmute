@@ -397,11 +397,14 @@ function pushSpeechActivityToPopup() {
 // ---- main loop --------------------------------------------------------------
 
 async function loadModels() {
-  const modelsUrl = chrome.runtime.getURL('models');
+  // Trailing slash matters: face-api resolves shard filenames in the weights
+  // manifest as relative URLs against this base, so without it the resolution
+  // strips the 'models/' segment and shard fetches 404.
+  const modelsUrl = chrome.runtime.getURL('models/');
   LOG('loading face-api models from', modelsUrl);
   // Probe one weights manifest first so we get a useful error if the resource
   // isn't actually accessible (CSP / web_accessible_resources mismatch).
-  const probeUrl = modelsUrl + '/tiny_face_detector_model-weights_manifest.json';
+  const probeUrl = modelsUrl + 'tiny_face_detector_model-weights_manifest.json';
   try {
     const probe = await fetch(probeUrl);
     LOG('models probe', probe.status, probe.url);
