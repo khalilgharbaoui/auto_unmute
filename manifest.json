@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Google Meet Auto Unmute",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Automatically unmutes you in Google Meet when you start talking while muted, using mouth-movement and speech detection.",
   "icons": {
     "16": "images/icon16.png",
@@ -24,10 +24,7 @@
         "auto_unmute.html",
         "auto_unmute.js",
         "js/face-api.min.js",
-        "models/tiny_face_detector_model-shard1",
-        "models/tiny_face_detector_model-weights_manifest.json",
-        "models/face_landmark_68_tiny_model-shard1",
-        "models/face_landmark_68_tiny_model-weights_manifest.json"
+        "models/*"
       ],
       "matches": ["https://meet.google.com/*"]
     }

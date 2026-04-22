@@ -398,11 +398,23 @@ function pushSpeechActivityToPopup() {
 
 async function loadModels() {
   const modelsUrl = chrome.runtime.getURL('models');
+  LOG('loading face-api models from', modelsUrl);
+  // Probe one weights manifest first so we get a useful error if the resource
+  // isn't actually accessible (CSP / web_accessible_resources mismatch).
+  try {
+    const probe = await fetch(modelsUrl + '/tiny_face_detector_model-weights_manifest.json');
+    LOG('models probe', probe.status, probe.url);
+    if (!probe.ok) throw new Error('probe HTTP ' + probe.status);
+  } catch (err) {
+    console.warn('[auto_unmute] model probe failed:', err);
+    return;
+  }
   await Promise.all([
     faceapi.nets.tinyFaceDetector.loadFromUri(modelsUrl),
     faceapi.nets.faceLandmark68TinyNet.loadFromUri(modelsUrl),
   ]);
   modelsReady = true;
+  LOG('face-api models ready');
 }
 
 async function tick() {
