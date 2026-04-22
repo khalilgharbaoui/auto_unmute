@@ -98,4 +98,4 @@ git tag v1.0.1 && git push --tags
 
 ## Privacy
 
-The extension does not collect, transmit, or store any user data. Full policy: [`docs/privacy.md`](./docs/privacy.md) (also published at https://khalilgharbaoui.github.io/auto_unmute/privacy.html once GitHub Pages is enabled).
+The extension does not collect, transmit, or store any user data. Full policy: [`docs/privacy.md`](./docs/privacy.md) (also published at https://khalilgharbaoui.codez.it/auto_unmute/privacy.html once GitHub Pages is enabled).

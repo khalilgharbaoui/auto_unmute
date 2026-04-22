@@ -53,7 +53,7 @@ KEY FEATURES
 
 PRIVACY
 
-100% local. The extension does not collect, transmit, store, or share any user data. No analytics, no telemetry, no remote servers, no third parties. Your camera and microphone streams are read frame-by-frame in your browser and immediately discarded. Only your settings are saved (via Chrome's standard sync storage). Full privacy policy: https://khalilgharbaoui.github.io/auto_unmute/privacy.html
+100% local. The extension does not collect, transmit, store, or share any user data. No analytics, no telemetry, no remote servers, no third parties. Your camera and microphone streams are read frame-by-frame in your browser and immediately discarded. Only your settings are saved (via Chrome's standard sync storage). Full privacy policy: https://khalilgharbaoui.codez.it/auto_unmute/privacy.html
 
 OPEN SOURCE
 
@@ -138,7 +138,7 @@ Tick the three certification checkboxes:
 ## Privacy policy URL
 
 ```
-https://khalilgharbaoui.github.io/auto_unmute/privacy.html
+https://khalilgharbaoui.codez.it/auto_unmute/privacy.html
 ```
 
 (Becomes live after you enable GitHub Pages on the repo — see the README.)
