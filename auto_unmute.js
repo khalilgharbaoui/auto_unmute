@@ -172,10 +172,10 @@ async function stopCamera() {
 
 let audioStream = null;
 let audioCtx = null;
-let analyser = null;
-let analyserBuf = null;
+let audioProcessor = null;
+let audioSource = null;
 let audioActive = false;
-let lastAudioRms = 0;
+let lastAudioRms = 0;       // peak RMS observed since the last tick read
 let lastAboveThresholdAt = 0;
 
 async function startAudioLevel() {
@@ -190,13 +190,44 @@ async function startAudioLevel() {
       video: false,
     });
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const src = audioCtx.createMediaStreamSource(audioStream);
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 1024;
-    analyser.smoothingTimeConstant = 0.0; // we want raw, snappy values
-    analyserBuf = new Float32Array(analyser.fftSize);
-    src.connect(analyser);
-    LOG('audio level detector started');
+    audioSource = audioCtx.createMediaStreamSource(audioStream);
+    // ScriptProcessorNode is deprecated but universally supported and gives
+    // us callback-per-buffer semantics on the audio thread. bufferSize=256
+    // ≈ 5.3ms at 48kHz, so we evaluate the threshold ~190x/sec — there is
+    // no gap between samples and syllable onsets cannot fall through it.
+    // (AudioWorklet would be cleaner but requires a separate file URL,
+    // which adds MV3 packaging friction for negligible gain at this rate.)
+    audioProcessor = audioCtx.createScriptProcessor(256, 1, 1);
+    audioProcessor.onaudioprocess = (ev) => {
+      const data = ev.inputBuffer.getChannelData(0);
+      let sumSq = 0;
+      for (let i = 0; i < data.length; i++) {
+        const v = data[i];
+        sumSq += v * v;
+      }
+      const rms = Math.sqrt(sumSq / data.length);
+      // Track peak across all buffers since the tick last read it, so a
+      // single quiet frame can't mask a loud one.
+      if (rms > lastAudioRms) lastAudioRms = rms;
+      const now = Date.now();
+      if (rms > AUDIO_RMS_THRESHOLD) {
+        lastAboveThresholdAt = now;
+        audioActive = true;
+      } else if (audioActive && (now - lastAboveThresholdAt) >= AUDIO_HANGOVER_MS) {
+        // Hold audioActive across brief sub-threshold dips (consonants,
+        // pauses between syllables) so the streak counter doesn't reset
+        // mid-word.
+        audioActive = false;
+      }
+    };
+    // ScriptProcessorNode only runs while connected to the destination.
+    // Route through a muted GainNode so we never feed mic audio back out.
+    const sink = audioCtx.createGain();
+    sink.gain.value = 0;
+    audioSource.connect(audioProcessor);
+    audioProcessor.connect(sink);
+    sink.connect(audioCtx.destination);
+    LOG('audio level detector started (script-processor, ~5ms granularity)');
   } catch (err) {
     console.warn('[auto_unmute] audio level unavailable:', err);
     audioStream = null;
@@ -206,8 +237,15 @@ async function startAudioLevel() {
 async function stopAudioLevel() {
   audioActive = false;
   lastAudioRms = 0;
-  analyser = null;
-  analyserBuf = null;
+  if (audioProcessor) {
+    try { audioProcessor.disconnect(); } catch (_e) { /* noop */ }
+    audioProcessor.onaudioprocess = null;
+    audioProcessor = null;
+  }
+  if (audioSource) {
+    try { audioSource.disconnect(); } catch (_e) { /* noop */ }
+    audioSource = null;
+  }
   if (audioCtx) {
     try { await audioCtx.close(); } catch (_e) { /* noop */ }
     audioCtx = null;
@@ -218,28 +256,11 @@ async function stopAudioLevel() {
   }
 }
 
+// The script-processor callback updates audioActive in real time, so the
+// per-tick poll only needs to reset the running peak so the next tick window
+// reflects only fresh audio.
 function sampleAudioLevel() {
-  if (!analyser || !analyserBuf) {
-    audioActive = false;
-    return;
-  }
-  analyser.getFloatTimeDomainData(analyserBuf);
-  let sumSq = 0;
-  for (let i = 0; i < analyserBuf.length; i++) {
-    const v = analyserBuf[i];
-    sumSq += v * v;
-  }
-  const rms = Math.sqrt(sumSq / analyserBuf.length);
-  lastAudioRms = rms;
-  const now = Date.now();
-  if (rms > AUDIO_RMS_THRESHOLD) {
-    lastAboveThresholdAt = now;
-    audioActive = true;
-  } else {
-    // Hold audioActive across brief sub-threshold dips (consonants, pauses
-    // between syllables) so the streak counter doesn't reset mid-word.
-    audioActive = (now - lastAboveThresholdAt) < AUDIO_HANGOVER_MS;
-  }
+  lastAudioRms = 0;
 }
 
 // ---- Web Speech API ---------------------------------------------------------
