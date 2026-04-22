@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 800" font-family="-apple-system, 'Segoe UI', Inter, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1220"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#86efac"/>
+      <stop offset="100%" stop-color="#22c55e"/>
+    </linearGradient>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="40"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="800" fill="url(#bg)"/>
+  <ellipse cx="640" cy="420" rx="340" ry="200" fill="#22c55e" opacity="0.18" filter="url(#soft)"/>
+
+  <!-- Shield -->
+  <g transform="translate(640 320)">
+    <path d="M0 -140 L120 -100 L120 20 C120 90 60 140 0 160 C-60 140 -120 90 -120 20 L-120 -100 Z"
+          fill="url(#greenGrad)" opacity="0.18" stroke="#22c55e" stroke-width="2"/>
+    <path d="M-44 10 L-12 42 L48 -28" stroke="#22c55e" stroke-width="10" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <text x="640" y="560" text-anchor="middle" font-size="56" font-weight="800" fill="#f8fafc">
+    Nothing leaves your browser.
+  </text>
+  <text x="640" y="610" text-anchor="middle" font-size="22" fill="#94a3b8">
+    No servers. No accounts. No tracking. No audio or video uploaded — ever.
+  </text>
+
+  <!-- Trust pills -->
+  <g transform="translate(280 670)" font-size="14" font-weight="700" fill="#86efac">
+    <g>
+      <rect width="200" height="44" rx="22" fill="#052e16" stroke="#22c55e"/>
+      <text x="100" y="28" text-anchor="middle">100% ON-DEVICE</text>
+    </g>
+    <g transform="translate(220 0)">
+      <rect width="240" height="44" rx="22" fill="#052e16" stroke="#22c55e"/>
+      <text x="120" y="28" text-anchor="middle">OPEN SOURCE • MIT</text>
+    </g>
+    <g transform="translate(480 0)">
+      <rect width="240" height="44" rx="22" fill="#052e16" stroke="#22c55e"/>
+      <text x="120" y="28" text-anchor="middle">NEVER AUTO-MUTES</text>
+    </g>
+  </g>
+</svg>

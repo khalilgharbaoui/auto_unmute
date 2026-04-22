@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 280" font-family="-apple-system, 'Segoe UI', Inter, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1220"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#86efac"/>
+      <stop offset="100%" stop-color="#22c55e"/>
+    </linearGradient>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+  </defs>
+
+  <rect width="440" height="280" fill="url(#bg)"/>
+  <ellipse cx="340" cy="140" rx="120" ry="100" fill="#22c55e" opacity="0.22" filter="url(#soft)"/>
+
+  <!-- Mic -->
+  <g transform="translate(340 140)">
+    <circle r="64" fill="url(#greenGrad)" opacity="0.18"/>
+    <circle r="46" fill="url(#greenGrad)"/>
+    <g transform="translate(-18 -24)" fill="#0b1220">
+      <rect x="10" y="0" width="16" height="28" rx="8"/>
+      <path d="M2 22 a16 16 0 0 0 32 0 v-3 h-4 v3 a12 12 0 0 1 -24 0 v-3 h-4 z"/>
+      <rect x="16" y="42" width="4" height="10"/>
+      <rect x="10" y="52" width="16" height="3" rx="1.5"/>
+    </g>
+    <g stroke="#22c55e" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.9">
+      <path d="M62 -14 Q76 0 62 14"/>
+    </g>
+  </g>
+
+  <text x="36" y="92" font-size="32" font-weight="800" fill="#f8fafc">Auto</text>
+  <text x="36" y="128" font-size="32" font-weight="800" fill="#86efac">Unmute</text>
+  <text x="36" y="160" font-size="14" fill="#94a3b8">for Google Meet</text>
+
+  <g transform="translate(36 196)">
+    <rect width="200" height="34" rx="17" fill="#052e16" stroke="#22c55e"/>
+    <text x="100" y="22" text-anchor="middle" font-size="12" font-weight="700" fill="#86efac">START TALKING — IT JUST WORKS</text>
+  </g>
+</svg>

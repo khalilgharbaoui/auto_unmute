@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 800" font-family="-apple-system, 'Segoe UI', Inter, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1220"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#86efac"/>
+      <stop offset="100%" stop-color="#22c55e"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1280" height="800" fill="url(#bg)"/>
+  <g stroke="#1f2a44" stroke-width="1" opacity="0.5">
+    <path d="M0 200 H1280 M0 400 H1280 M0 600 H1280"/>
+    <path d="M320 0 V800 M640 0 V800 M960 0 V800"/>
+  </g>
+
+  <text x="640" y="100" text-anchor="middle" font-size="48" font-weight="800" fill="#f8fafc">
+    How it works
+  </text>
+  <text x="640" y="146" text-anchor="middle" font-size="22" fill="#94a3b8">
+    Four steps. Zero servers. All in your browser.
+  </text>
+
+  <!-- Steps -->
+  <g font-family="-apple-system, 'Segoe UI', Inter, system-ui, sans-serif">
+    <!-- 1: Camera + Mic -->
+    <g transform="translate(80 260)">
+      <rect width="240" height="280" rx="20" fill="#0f172a" stroke="#334155"/>
+      <circle cx="120" cy="84" r="44" fill="#1e293b" stroke="#22c55e" stroke-width="2"/>
+      <g transform="translate(96 64)" fill="#22c55e">
+        <rect x="0" y="6" width="40" height="28" rx="6"/>
+        <path d="M40 14 L54 6 L54 34 L40 26 z"/>
+      </g>
+      <text x="120" y="170" text-anchor="middle" font-size="14" font-weight="700" letter-spacing="2" fill="#94a3b8">STEP 1</text>
+      <text x="120" y="200" text-anchor="middle" font-size="20" font-weight="700" fill="#f8fafc">Watch &amp; listen</text>
+      <text x="120" y="230" text-anchor="middle" font-size="14" fill="#cbd5e1">Camera + mic via</text>
+      <text x="120" y="248" text-anchor="middle" font-size="14" fill="#cbd5e1">Web Speech API</text>
+    </g>
+
+    <!-- arrow -->
+    <g transform="translate(330 400)" stroke="#475569" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 0 H40 M28 -10 L40 0 L28 10"/>
+    </g>
+
+    <!-- 2: Detect -->
+    <g transform="translate(390 260)">
+      <rect width="240" height="280" rx="20" fill="#0f172a" stroke="#334155"/>
+      <g transform="translate(120 84)">
+        <ellipse rx="44" ry="44" fill="#1e293b" stroke="#22c55e" stroke-width="2"/>
+        <ellipse rx="22" ry="9" fill="none" stroke="#22c55e" stroke-width="2"/>
+        <g fill="#22c55e">
+          <circle cx="-22" cy="0" r="2"/>
+          <circle cx="-12" cy="-6" r="2"/>
+          <circle cx="0" cy="-9" r="2"/>
+          <circle cx="12" cy="-6" r="2"/>
+          <circle cx="22" cy="0" r="2"/>
+          <circle cx="12" cy="6" r="2"/>
+          <circle cx="0" cy="9" r="2"/>
+          <circle cx="-12" cy="6" r="2"/>
+        </g>
+      </g>
+      <text x="120" y="170" text-anchor="middle" font-size="14" font-weight="700" letter-spacing="2" fill="#94a3b8">STEP 2</text>
+      <text x="120" y="200" text-anchor="middle" font-size="20" font-weight="700" fill="#f8fafc">Detect mouth</text>
+      <text x="120" y="230" text-anchor="middle" font-size="14" fill="#cbd5e1">face-api.js runs</text>
+      <text x="120" y="248" text-anchor="middle" font-size="14" fill="#cbd5e1">on-device</text>
+    </g>
+
+    <g transform="translate(640 400)" stroke="#475569" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 0 H40 M28 -10 L40 0 L28 10"/>
+    </g>
+
+    <!-- 3: Confirm -->
+    <g transform="translate(700 260)">
+      <rect width="240" height="280" rx="20" fill="#0f172a" stroke="#334155"/>
+      <g transform="translate(120 84)">
+        <circle r="44" fill="#1e293b" stroke="#22c55e" stroke-width="2"/>
+        <text text-anchor="middle" y="6" font-size="22" font-weight="800" fill="#22c55e">~400ms</text>
+      </g>
+      <text x="120" y="170" text-anchor="middle" font-size="14" font-weight="700" letter-spacing="2" fill="#94a3b8">STEP 3</text>
+      <text x="120" y="200" text-anchor="middle" font-size="20" font-weight="700" fill="#f8fafc">Confirm intent</text>
+      <text x="120" y="230" text-anchor="middle" font-size="14" fill="#cbd5e1">Sustained speech</text>
+      <text x="120" y="248" text-anchor="middle" font-size="14" fill="#cbd5e1">avoids false fires</text>
+    </g>
+
+    <g transform="translate(950 400)" stroke="#475569" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 0 H40 M28 -10 L40 0 L28 10"/>
+    </g>
+
+    <!-- 4: Unmute -->
+    <g transform="translate(1010 260)">
+      <rect width="240" height="280" rx="20" fill="#0f172a" stroke="#22c55e" stroke-width="2"/>
+      <g transform="translate(120 84)">
+        <circle r="44" fill="url(#greenGrad)"/>
+        <g transform="translate(-9 -16)" fill="#0b1220">
+          <rect x="0" y="0" width="18" height="22" rx="9"/>
+          <path d="M-6 18 a15 15 0 0 0 30 0 v-2 h-4 v2 a11 11 0 0 1 -22 0 v-2 h-4 z"/>
+        </g>
+      </g>
+      <text x="120" y="170" text-anchor="middle" font-size="14" font-weight="700" letter-spacing="2" fill="#86efac">STEP 4</text>
+      <text x="120" y="200" text-anchor="middle" font-size="20" font-weight="700" fill="#f8fafc">Press Ctrl/⌘+D</text>
+      <text x="120" y="230" text-anchor="middle" font-size="14" fill="#cbd5e1">Same shortcut</text>
+      <text x="120" y="248" text-anchor="middle" font-size="14" fill="#cbd5e1">you'd press yourself</text>
+    </g>
+  </g>
+
+  <!-- Footer note -->
+  <text x="640" y="640" text-anchor="middle" font-size="18" fill="#94a3b8">
+    Never auto-mutes. Strictly opposite of the original Auto Mute.
+  </text>
+  <g transform="translate(560 670)">
+    <rect width="160" height="36" rx="18" fill="#052e16" stroke="#22c55e"/>
+    <text x="80" y="23" text-anchor="middle" font-size="13" font-weight="700" fill="#86efac">100% LOCAL</text>
+  </g>
+</svg>

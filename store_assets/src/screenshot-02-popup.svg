@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 800" font-family="-apple-system, 'Segoe UI', Inter, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1220"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#86efac"/>
+      <stop offset="100%" stop-color="#22c55e"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="20"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="800" fill="url(#bg)"/>
+  <g stroke="#1f2a44" stroke-width="1" opacity="0.5">
+    <path d="M0 200 H1280 M0 400 H1280 M0 600 H1280"/>
+    <path d="M320 0 V800 M640 0 V800 M960 0 V800"/>
+  </g>
+
+  <!-- Headline -->
+  <text x="640" y="100" text-anchor="middle" font-size="48" font-weight="800" fill="#f8fafc">
+    Tune it your way.
+  </text>
+  <text x="640" y="146" text-anchor="middle" font-size="22" fill="#94a3b8">
+    Pick your detector, set sensitivity, and forget it's there.
+  </text>
+
+  <!-- Browser chrome frame -->
+  <g transform="translate(160 200)">
+    <rect width="960" height="540" rx="16" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+    <rect width="960" height="44" rx="16" fill="#1e293b"/>
+    <rect y="28" width="960" height="16" fill="#1e293b"/>
+    <g transform="translate(20 22)">
+      <circle r="7" fill="#ef4444"/>
+      <circle cx="22" r="7" fill="#f59e0b"/>
+      <circle cx="44" r="7" fill="#22c55e"/>
+    </g>
+    <text x="80" y="28" font-size="13" fill="#64748b">chrome-extension://…/popup.html</text>
+
+    <!-- Popup body -->
+    <g transform="translate(40 80)">
+      <!-- Header row -->
+      <g>
+        <circle cx="22" cy="22" r="22" fill="url(#greenGrad)"/>
+        <g transform="translate(8 8)" fill="#0b1220">
+          <rect x="12" y="0" width="8" height="18" rx="4"/>
+          <path d="M4 14 a12 12 0 0 0 24 0 v-2 h-3 v2 a9 9 0 0 1 -18 0 v-2 h-3 z"/>
+          <rect x="14" y="26" width="4" height="6"/>
+        </g>
+        <text x="60" y="20" font-size="22" font-weight="800" fill="#f8fafc">Auto Unmute</text>
+        <text x="60" y="42" font-size="13" fill="#94a3b8">Active in this tab</text>
+
+        <!-- toggle ON -->
+        <g transform="translate(740 4)">
+          <rect width="76" height="36" rx="18" fill="url(#greenGrad)"/>
+          <circle cx="58" cy="18" r="14" fill="#fff"/>
+          <text x="-12" y="24" text-anchor="end" font-size="13" font-weight="700" fill="#86efac">ON</text>
+        </g>
+      </g>
+
+      <!-- Engine selector -->
+      <g transform="translate(0 80)">
+        <text font-size="13" font-weight="700" letter-spacing="1.5" fill="#94a3b8">DETECTION ENGINE</text>
+        <g transform="translate(0 16)">
+          <rect width="280" height="44" rx="10" fill="#1e293b" stroke="#22c55e" stroke-width="2"/>
+          <circle cx="22" cy="22" r="6" fill="#22c55e"/>
+          <text x="40" y="28" font-size="15" font-weight="600" fill="#f8fafc">Image + Speech</text>
+        </g>
+        <g transform="translate(296 16)">
+          <rect width="180" height="44" rx="10" fill="#1e293b" stroke="#334155"/>
+          <circle cx="22" cy="22" r="6" fill="none" stroke="#475569" stroke-width="2"/>
+          <text x="40" y="28" font-size="15" fill="#cbd5e1">Image only</text>
+        </g>
+        <g transform="translate(492 16)">
+          <rect width="180" height="44" rx="10" fill="#1e293b" stroke="#334155"/>
+          <circle cx="22" cy="22" r="6" fill="none" stroke="#475569" stroke-width="2"/>
+          <text x="40" y="28" font-size="15" fill="#cbd5e1">Speech only</text>
+        </g>
+      </g>
+
+      <!-- Sliders -->
+      <g transform="translate(0 180)">
+        <text font-size="13" font-weight="700" letter-spacing="1.5" fill="#94a3b8">MOUTH SENSITIVITY</text>
+        <g transform="translate(0 22)">
+          <rect width="400" height="6" rx="3" fill="#334155"/>
+          <rect width="260" height="6" rx="3" fill="url(#greenGrad)"/>
+          <circle cx="260" cy="3" r="11" fill="#fff" stroke="#22c55e" stroke-width="2"/>
+          <text x="420" y="9" font-size="14" font-weight="700" fill="#f8fafc">0.65</text>
+        </g>
+
+        <text y="74" font-size="13" font-weight="700" letter-spacing="1.5" fill="#94a3b8">SPEECH HOLD</text>
+        <g transform="translate(0 96)">
+          <rect width="400" height="6" rx="3" fill="#334155"/>
+          <rect width="160" height="6" rx="3" fill="url(#greenGrad)"/>
+          <circle cx="160" cy="3" r="11" fill="#fff" stroke="#22c55e" stroke-width="2"/>
+          <text x="420" y="9" font-size="14" font-weight="700" fill="#f8fafc">400 ms</text>
+        </g>
+      </g>
+
+      <!-- Debug panels -->
+      <g transform="translate(560 80)">
+        <text font-size="13" font-weight="700" letter-spacing="1.5" fill="#94a3b8">LIVE DEBUG</text>
+        <!-- mouth landmarks -->
+        <g transform="translate(0 16)">
+          <rect width="148" height="100" rx="10" fill="#020617" stroke="#334155"/>
+          <g transform="translate(74 50)">
+            <ellipse rx="34" ry="14" fill="none" stroke="#22c55e" stroke-width="1.5" opacity="0.6"/>
+            <g fill="#22c55e">
+              <circle cx="-34" cy="0" r="2"/>
+              <circle cx="-22" cy="-8" r="2"/>
+              <circle cx="-8" cy="-12" r="2"/>
+              <circle cx="8" cy="-12" r="2"/>
+              <circle cx="22" cy="-8" r="2"/>
+              <circle cx="34" cy="0" r="2"/>
+              <circle cx="22" cy="8" r="2"/>
+              <circle cx="8" cy="12" r="2"/>
+              <circle cx="-8" cy="12" r="2"/>
+              <circle cx="-22" cy="8" r="2"/>
+            </g>
+          </g>
+          <text x="74" y="92" text-anchor="middle" font-size="10" fill="#64748b">mouth open: 0.71</text>
+        </g>
+        <!-- waveform -->
+        <g transform="translate(160 16)">
+          <rect width="148" height="100" rx="10" fill="#020617" stroke="#334155"/>
+          <g transform="translate(0 50)" stroke="#22c55e" stroke-width="2" fill="none" stroke-linecap="round">
+            <path d="M10 0 L18 -8 L26 6 L34 -22 L42 18 L50 -14 L58 24 L66 -18 L74 12 L82 -26 L90 20 L98 -10 L106 8 L114 -16 L122 14 L130 -6 L138 0"/>
+          </g>
+          <text x="74" y="92" text-anchor="middle" font-size="10" fill="#64748b">"hello team"</text>
+        </g>
+
+        <g transform="translate(0 140)">
+          <rect width="308" height="44" rx="10" fill="#052e16" stroke="#22c55e"/>
+          <circle cx="22" cy="22" r="7" fill="#22c55e"/>
+          <text x="40" y="28" font-size="14" font-weight="700" fill="#86efac">Voice detected — unmuting</text>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>
