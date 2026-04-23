@@ -121,6 +121,7 @@ If an agent needs to ship a full release end-to-end, use this sequence.
 
 - Update `manifest.json` version.
 - Keep `manifest.json` description at **132 chars max** (Chrome Web Store hard limit).
+- **Confirm the previous submission has cleared review in the Chrome Web Store dashboard.** If the prior version is still in *Pending review*, *Ready to publish*, or *Deleted* state, the next upload will fail with `ITEM_NOT_UPDATABLE`. Either click **Publish** (if it's *Ready to publish*) or wait for Google to finish reviewing. Dashboard: `https://chromewebstore.google.com/developer/dashboard`.
 - If listing artwork changed, regenerate PNGs from SVG (pass one or more asset names, or no args for all):
 
 ```bash
@@ -164,6 +165,15 @@ Look specifically for these steps in the `publish` job:
 
 - `Upload new ZIP to Chrome Web Store`
 - `Submit for review`
+
+Common CWS upload failures and how to resolve them:
+
+- `PKG_MANIFEST_SUMMARY_TOO_LONG` — `manifest.json` description exceeds 132 chars. Shorten it, bump the patch version, retag.
+- `ITEM_NOT_UPDATABLE` — the prior submission is still in *Pending review* / *Ready to publish* / *Deleted*. Resolve via dashboard (publish or wait), then re-run the failed publish step:
+
+```bash
+gh run rerun <run-id> --failed
+```
 
 ### 4) What is not automated (manual dashboard updates)
 
