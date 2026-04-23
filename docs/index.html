@@ -4,11 +4,14 @@
 <meta charset="UTF-8">
 <title>Auto Unmute for Google Meet</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Forgot you were muted? Auto Unmute detects when you start talking and turns your mic back on automatically. 100% local, open source.">
+<meta name="description" content="Auto Unmute for Google Meet detects live voice onset while muted using audio level, camera mouth movement, and optional speech recognition.">
 <meta property="og:title" content="Auto Unmute for Google Meet">
-<meta property="og:description" content="Forgot you were muted? Auto Unmute detects when you start talking and turns your mic back on automatically.">
+<meta property="og:description" content="Detect speech while muted in Google Meet and unmute automatically with local audio/camera/speech signals.">
 <meta property="og:image" content="./screenshots/promo-marquee.png">
 <meta property="og:type" content="website">
+<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="./favicon-16.png">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
 <style>
   :root { --bg: #0b1220; --panel: #0f172a; --border: #1f2a44;
           --text: #f8fafc; --muted: #94a3b8; --green: #22c55e; --green-soft: #86efac; }
@@ -42,9 +45,10 @@
 <main>
   <header>
     <h1>Auto Unmute for Google Meet</h1>
-    <p class="lede">Forgot you were muted? Auto Unmute detects when you start talking and turns your mic back on automatically. Never auto-mutes. 100% local.</p>
+    <p class="lede">Auto Unmute watches for voice onset while you're muted in Google Meet, then unmutes automatically. It never auto-mutes you.</p>
     <div class="cta">
-      <a class="btn" href="https://github.com/khalilgharbaoui/auto_unmute/releases/latest">Download latest</a>
+      <a class="btn" href="https://chromewebstore.google.com/detail/google-meet-auto-unmute/bgpcnhfoanbgbjhkjehbnbphlmhekdcm">Install from Chrome Web Store</a>
+      <a class="btn alt" href="https://github.com/khalilgharbaoui/auto_unmute/releases/latest">Download latest ZIP</a>
       <a class="btn alt" href="https://github.com/khalilgharbaoui/auto_unmute">Source on GitHub</a>
       <a class="btn alt" href="./privacy.html">Privacy policy</a>
     </div>
@@ -59,16 +63,16 @@
 
   <h2>How it works</h2>
   <ul class="bullets">
-    <li>Watches your camera for mouth movement (via <a href="https://github.com/justadudewhohacks/face-api.js">face-api.js</a>) and your microphone for recognised speech (via the Web Speech API).</li>
-    <li>When you have been talking for ~400&nbsp;ms while muted, it dispatches the same <code>Ctrl+D</code> / <code>⌘+D</code> shortcut you would press yourself.</li>
+    <li>Runs a fast local audio-level detector (AudioWorklet RMS) plus optional camera mouth detection (MediaPipe Face Landmarker) and optional Web Speech signal.</li>
+    <li>When sustained speech is detected while muted, it toggles your mic using Meet's own control path (mic button click first, hotkey fallback).</li>
     <li>Never re-mutes you on its own. Only you decide when to mute again.</li>
-    <li>100% local. No data leaves your browser.</li>
+    <li>100% local extension processing. No analytics, telemetry, or server-side pipeline.</li>
   </ul>
 
   <h2>Install</h2>
   <ul class="bullets">
-    <li>Coming to the Chrome Web Store.</li>
-    <li>Until then: download the ZIP from <a href="https://github.com/khalilgharbaoui/auto_unmute/releases/latest">the latest release</a>, unzip, then visit <code>chrome://extensions</code> → enable Developer mode → "Load unpacked" → pick the folder.</li>
+    <li>Install directly from the <a href="https://chromewebstore.google.com/detail/google-meet-auto-unmute/bgpcnhfoanbgbjhkjehbnbphlmhekdcm">Chrome Web Store</a>.</li>
+    <li>Or load unpacked: download the ZIP from <a href="https://github.com/khalilgharbaoui/auto_unmute/releases/latest">the latest release</a>, unzip, then visit <code>chrome://extensions</code> -> enable Developer mode -> Load unpacked.</li>
   </ul>
 
   <footer>
