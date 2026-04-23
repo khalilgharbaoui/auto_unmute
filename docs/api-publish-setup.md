@@ -47,11 +47,18 @@ It prints the new **extension ID** (32-char string). Save it.
 
 > Alternative: upload `dist/auto_unmute-1.0.0.zip` once via the dashboard at https://chrome.google.com/webstore/devconsole — the extension ID then appears in the URL of the item's edit page. Either way works.
 
-### 4. Fill the listing form (one time only)
+### 4. Fill/update the listing form (manual)
 
 Open the item in the dashboard: https://chrome.google.com/webstore/devconsole
 
-Listing fields (description, screenshots, category, privacy policy URL, etc.) **cannot be set via API** — fill them in once. Copy/paste from `docs/store-listing.md`. After this, every API-driven update inherits these settings.
+Listing fields (description, screenshots, promo images, category, privacy policy URL, etc.) **cannot be set via API** — update them in the dashboard manually whenever copy/visuals change.
+
+Use these repo sources:
+
+- Text: `docs/store-listing.md`
+- Small promo tile (search results card): `store_assets/out/promo-small.png`
+- Marquee promo: `store_assets/out/promo-marquee.png`
+- Screenshots: `store_assets/out/screenshot-*.png`
 
 ### 5. Add GitHub secrets
 
@@ -86,3 +93,4 @@ You can also trigger a publish manually without tagging via **Actions → Build 
 - The `publish` workflow job is gated on the secrets existing — it'll skip with a warning if any are missing, so the build still works for forks.
 - Refresh tokens issued by an OAuth app in **Testing** mode expire after 7 days. To avoid this, click **Publish App** on the OAuth consent screen → "In production". You don't need Google's verification for an internal-only token; the unverified-app warning only affects new sign-ins.
 - The `chrome-webstore-upload-cli` package is the underlying tool ([docs](https://github.com/fregante/chrome-webstore-upload-cli)).
+- To regenerate listing PNGs from SVG sources: `bash scripts/render-store-assets.sh [asset-name ...]`.

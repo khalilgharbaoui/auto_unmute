@@ -113,21 +113,70 @@ https://chromewebstore.google.com/detail/google-meet-auto-unmute/bgpcnhfoanbgbjh
 
 Full policy: [`docs/privacy.md`](./docs/privacy.md)
 
-## Build and release
+## Release and Web Store deployment (agent runbook)
 
-Build zip:
+If an agent needs to ship a full release end-to-end, use this sequence.
+
+### 1) Pre-flight checks
+
+- Update `manifest.json` version.
+- Keep `manifest.json` description at **132 chars max** (Chrome Web Store hard limit).
+- If listing artwork changed, regenerate PNGs from SVG (pass one or more asset names, or no args for all):
 
 ```bash
+bash scripts/render-store-assets.sh promo-small
+```
+
+- Keep listing copy current in `docs/store-listing.md`.
+
+### 2) Build and release (fully automated)
+
+```bash
+# build package
 bash scripts/build-zip.sh
-# -> dist/auto_unmute-<version>.zip
+
+# commit + push
+git add .
+git commit -m "vX.Y.Z: <release summary>"
+git push origin main
+
+# tag-driven release + CWS upload/publish workflow
+git tag -a vX.Y.Z -m "vX.Y.Z"
+git push origin vX.Y.Z
 ```
 
-Automated GitHub release workflow (tag push):
+Tag push triggers `.github/workflows/release.yml`, which:
+
+1. Builds ZIP and attaches it to GitHub Release
+2. Uploads ZIP to Chrome Web Store
+3. Submits for review
+
+### 3) Verify pipeline status
 
 ```bash
-git tag vX.Y.Z
-git push --tags
+gh run list --workflow release.yml --limit 5
+gh run view <run-id> --log-failed
 ```
+
+Look specifically for these steps in the `publish` job:
+
+- `Upload new ZIP to Chrome Web Store`
+- `Submit for review`
+
+### 4) What is not automated (manual dashboard updates)
+
+Chrome Web Store API upload/publish does **not** manage listing metadata fields (description, screenshots, promo art, category text polish).
+
+For listing updates, open the dashboard item and update manually using:
+
+- Copy source: `docs/store-listing.md`
+- Small promo tile (search results): `store_assets/out/promo-small.png`
+- Marquee tile: `store_assets/out/promo-marquee.png`
+- Screenshots: `store_assets/out/screenshot-*.png`
+
+Dashboard: `https://chromewebstore.google.com/`
+
+Full API setup notes: `docs/api-publish-setup.md`
 
 ## Credits and license
 
