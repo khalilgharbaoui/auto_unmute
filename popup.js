@@ -6,6 +6,7 @@ const TICK_MS = 25;
 
 const els = {
   useAutoUnmute:        document.getElementById('useAutoUnmute'),
+  useAutoUnmuteState:   document.getElementById('useAutoUnmuteState'),
   settings:             document.getElementById('settings'),
   audioSettings:        document.getElementById('audioSettings'),
   imageSettings:        document.getElementById('imageSettings'),
@@ -16,6 +17,7 @@ const els = {
   speakFrames:          document.getElementById('speakFramesRequired'),
   speakFramesLabel:     document.getElementById('speakFramesRequiredLabel'),
   speakFramesMs:        document.getElementById('speakFramesMs'),
+  debugLogging:         document.getElementById('debugLogging'),
   audioThresh:          document.getElementById('audioRmsThreshold'),
   audioThreshLabel:     document.getElementById('audioThresholdLabel'),
   audioThreshHint:      document.getElementById('audioThresholdHint'),
@@ -33,15 +35,17 @@ const els = {
 
 const SETTING_KEYS = [
   'useAutoUnmute', 'engine', 'speakFramesRequired', 'marThreshold',
+  'debugLogging',
   'audioRmsThreshold', 'showAudioActivity',
   'speechLang', 'cameraDeviceId', 'showImageActivity', 'showSpeechActivity',
 ];
 
-// dB <-> linear RMS conversion. We expose dBFS to the user (-60..-20 range,
-// where -60 ≈ silence and -20 ≈ shouting) but persist linear RMS so the
+// dB <-> linear RMS conversion. We expose dBFS to the user on a full-ish
+// -60..0 range so the live meter can distinguish normal speech from truly loud
+// input, but persist linear RMS so the
 // detector loop avoids per-tick log math.
 const DB_MIN = -60;
-const DB_MAX = -20;
+const DB_MAX = 0;
 function rmsToDb(rms) {
   if (rms <= 0) return DB_MIN;
   return Math.max(DB_MIN, Math.min(0, 20 * Math.log10(rms)));
@@ -55,19 +59,26 @@ function clampDb(db) {
 // Friendly zone label for a given dBFS value.
 function dbZoneLabel(db) {
   if (db <= -55) return '(silent)';
-  if (db <= -45) return '(whisper / quiet)';
-  if (db <= -35) return '(normal speech)';
-  if (db <= -25) return '(loud speech)';
-  return '(shouting)';
+  if (db <= -42) return '(quiet speech)';
+  if (db <= -28) return '(normal speech)';
+  if (db <= -14) return '(loud speech)';
+  return '(very loud)';
 }
 
 let imageEnabled = false;
 let audioEnabled = false;
 let speechEnabled = false;
 
+function updateMasterState() {
+  const enabled = els.useAutoUnmute.checked;
+  els.useAutoUnmuteState.textContent = enabled ? 'ON' : 'OFF';
+  els.useAutoUnmuteState.style.color = enabled ? '#7cf0aa' : '#90a0ba';
+}
+
 function recomputeEnginesFromUI() {
   const useAU = els.useAutoUnmute.checked;
   const engine = (document.querySelector('input[name="engine"]:checked') || {}).value;
+  updateMasterState();
   audioEnabled  = useAU && (engine === 'engineSpeech' || engine === 'engineImageSpeech');
   imageEnabled  = useAU && (engine === 'engineImage'  || engine === 'engineImageSpeech');
   speechEnabled = useAU && (engine === 'engineRecognition' || engine === 'engineImageSpeech');
@@ -124,11 +135,21 @@ previewBus.onmessage = (ev) => {
   els.debugImage.dataset.blobUrl = url;
 };
 
+els.debugImage.addEventListener('load', () => {
+  const w = els.debugImage.naturalWidth;
+  const h = els.debugImage.naturalHeight;
+  if (!w || !h) return;
+  const frame = els.debugImage.parentElement;
+  const ratio = `${w} / ${h}`;
+  if (frame.style.aspectRatio !== ratio) frame.style.aspectRatio = ratio;
+});
+
 function clearImagePreview() {
   const prev = els.debugImage.dataset.blobUrl;
   if (prev) URL.revokeObjectURL(prev);
   els.debugImage.removeAttribute('src');
   els.debugImage.dataset.blobUrl = '';
+  els.debugImage.parentElement.style.aspectRatio = '';
 }
 
 function clearSpeechPreview() {
@@ -228,6 +249,10 @@ els.audioThresh.addEventListener('input', () => {
   persistAndBroadcast({ audioRmsThreshold: rms });
 });
 
+els.debugLogging.addEventListener('change', () => {
+  persistAndBroadcast({ debugLogging: els.debugLogging.checked });
+});
+
 els.showAudioActivity.addEventListener('change', () => {
   if (!els.showAudioActivity.checked) {
     els.audioMeterFill.style.width = '0%';
@@ -261,6 +286,7 @@ chrome.storage.sync.get(SETTING_KEYS, (data) => {
   els.useAutoUnmute.checked      = data.useAutoUnmute !== false;
   els.marThresh.value            = data.marThreshold ?? 0.20;
   els.speakFrames.value          = data.speakFramesRequired ?? 1;
+  els.debugLogging.checked       = !!data.debugLogging;
   els.speechLang.value           = data.speechLang ?? 'en-US';
   els.showImageActivity.checked  = data.showImageActivity !== false;
   els.showAudioActivity.checked  = data.showAudioActivity !== false;

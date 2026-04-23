@@ -9,7 +9,10 @@
 //   3. Handle requests relayed by the background service worker from the
 //      iframe / popup.
 
-const LOG = (...a) => console.debug('[auto_unmute/cs]', ...a);
+let debugLogging = false;
+const LOG = (...a) => {
+  if (debugLogging) console.debug('[auto_unmute/cs]', ...a);
+};
 
 const isMac = navigator.platform.toUpperCase().includes('MAC');
 let micButton = null;
@@ -17,6 +20,11 @@ let lastReportedState = 'unknown'; // 'mute' | 'unmute' | 'unknown'
 let micObserver = null;
 let pageObserver = null;
 let contextValid = true;
+let lastGestureAt = 0;
+
+chrome.storage.sync.get(['debugLogging'], (data) => {
+  debugLogging = !!data.debugLogging;
+});
 
 // Detect the "extension context invalidated" race: when the user reloads the
 // extension, this orphaned content script keeps running but chrome.runtime is
@@ -99,6 +107,20 @@ function toggleMic() {
   if (!clickMicButton()) pressMuteHotkey();
 }
 
+function relayUserGesture() {
+  if (!isCtxAlive()) return;
+  const now = Date.now();
+  if ((now - lastGestureAt) < 250) return;
+  lastGestureAt = now;
+  try {
+    chrome.runtime.sendMessage({ action: 'user_gesture' }, () => {
+      void chrome.runtime.lastError;
+    });
+  } catch (_e) {
+    contextValid = false;
+  }
+}
+
 // Attach a click listener so we notice manual mutes/unmutes.
 function bindMicButton(el) {
   if (micButton === el) return;
@@ -148,10 +170,16 @@ findAndBindMicButton();
 
 // Manual hotkey use should also re-broadcast.
 window.addEventListener('keydown', (ev) => {
+  relayUserGesture();
   const hot = isMac ? (ev.key === 'd' && ev.metaKey)
                     : (ev.key === 'd' && ev.ctrlKey);
   if (hot) setTimeout(broadcastMuteState, 80);
 });
+window.addEventListener('pointerdown', relayUserGesture, { capture: true, passive: true });
+
+if (document.userActivation && document.userActivation.hasBeenActive) {
+  relayUserGesture();
+}
 
 // Messages relayed from the iframe (and popup) by background.js.
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -169,6 +197,21 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   if (msg.action === 'get_mute_state') {
     sendResponse({ ok: true, isMuted: readMuteState() });
+    return false;
+  }
+
+  if (msg.action === 'settings_changed') {
+    if (msg.patch && msg.patch.debugLogging !== undefined) {
+      debugLogging = !!msg.patch.debugLogging;
+    }
+    try {
+      chrome.runtime.sendMessage(msg, () => {
+        void chrome.runtime.lastError;
+      });
+    } catch (_e) {
+      contextValid = false;
+    }
+    sendResponse({ ok: true });
     return false;
   }
 

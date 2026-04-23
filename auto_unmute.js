@@ -22,9 +22,14 @@ const TICK_MS = 25;
 // instant re-unmute when the user manually mutes mid-sentence (residual
 // speechActive/MAR can otherwise trigger immediately).
 const MUTE_COOLDOWN_MS = 1500;
+// Suppress unmute triggering for a beat after the user opens the popup. The
+// click itself (plus any momentary ambient noise) can cross the RMS threshold
+// and fire a same-tick unmute, which is surprising: the user wanted to look at
+// settings, not go live.
+const POPUP_OPEN_COOLDOWN_MS = 800;
 // Raw-audio fast path. Web Speech API has 200-500ms inherent latency before
-// onresult fires; reading raw mic level via AnalyserNode fires within one
-// audio frame (~20ms), giving sub-100ms total unmute latency.
+// onresult fires; reading raw mic level via an AudioWorklet fires within a few
+// audio frames, giving sub-100ms total unmute latency.
 // Threshold is now user-tunable via settings.audioRmsThreshold (slider in
 // popup). Default 0.005 ≈ -46 dBFS catches normal speech but may also catch
 // nearby people; users with chatty neighbors can raise it.
@@ -33,8 +38,11 @@ const AUDIO_RMS_THRESHOLD_DEFAULT = 0.005;
 // brief inter-syllable dip ('h-i') doesn't reset the speakStreak counter.
 // 350ms comfortably bridges the gap between fast consecutive words.
 const AUDIO_HANGOVER_MS = 350;
-const PREVIEW_W = 320;
-const PREVIEW_H = 180;
+// Longest edge of the preview canvas — the other edge is derived per-frame
+// from the live camera aspect ratio so the popup doesn't letterbox/crop.
+const PREVIEW_MAX = 320;
+let PREVIEW_W = 320;
+let PREVIEW_H = 180;
 const CAMERA_W = 640;
 const CAMERA_H = 360;
 // MediaPipe Face Landmarker — 478 3D landmarks, ~10ms inference on M-series.
@@ -57,6 +65,7 @@ const settings = {
   showImageActivity: true,
   showAudioActivity: true,
   showSpeechActivity: true,
+  debugLogging: false,
 };
 
 let imageEnabled = false;
@@ -72,12 +81,38 @@ let speechActive = false;             // true between onresult and silence
 let lastRecognizedWord = '';
 let unmuteRequestInFlight = false;
 let lastMutedAt = 0;
+let lastPopupOpenAt = 0;
 let diagTickCounter = 0;
 
 const PREVIEW_BUS = 'auto_unmute_preview_v1';
 const previewBus = new BroadcastChannel(PREVIEW_BUS);
 
-const LOG = (...a) => console.log('[auto_unmute/iframe]', ...a);
+const RAW_CONSOLE_LOG = console.log.bind(console);
+const RAW_CONSOLE_WARN = console.warn.bind(console);
+const RUNTIME_NOISE_PATTERNS = [
+  /FaceBlendshapesGraph acceleration to xnnpack/i,
+  /OpenGL error checking is disabled/i,
+  /Created TensorFlow Lite XNNPACK delegate for CPU/i,
+  /inference_feedback_manager\.cc:121/i,
+];
+
+function isRuntimeNoise(args) {
+  const text = args.map((v) => (typeof v === 'string' ? v : String(v))).join(' ');
+  return RUNTIME_NOISE_PATTERNS.some((re) => re.test(text));
+}
+
+console.log = (...args) => {
+  if (!settings.debugLogging && isRuntimeNoise(args)) return;
+  RAW_CONSOLE_LOG(...args);
+};
+console.warn = (...args) => {
+  if (!settings.debugLogging && isRuntimeNoise(args)) return;
+  RAW_CONSOLE_WARN(...args);
+};
+
+const LOG = (...a) => {
+  if (settings.debugLogging) RAW_CONSOLE_LOG('[auto_unmute/iframe]', ...a);
+};
 
 // ---- video & canvas ---------------------------------------------------------
 
@@ -106,15 +141,29 @@ document.body.appendChild(video);
 const frameCanvas = document.createElement('canvas');
 frameCanvas.width = CAMERA_W;
 frameCanvas.height = CAMERA_H;
-const frameCtx = frameCanvas.getContext('2d', { alpha: false });
+const frameCtx = frameCanvas.getContext('2d', { alpha: false, willReadFrequently: true });
 
 const previewCanvas = document.createElement('canvas');
 previewCanvas.width = PREVIEW_W;
 previewCanvas.height = PREVIEW_H;
 const previewCtx = previewCanvas.getContext('2d');
-// Mirror horizontally so the preview matches what users see in webcams.
-previewCtx.scale(-1, 1);
-previewCtx.translate(-PREVIEW_W, 0);
+
+// Resize the preview canvas to match the live camera aspect ratio, capped at
+// PREVIEW_MAX on the longest edge. Canvas resize clears ctx state, so the
+// horizontal mirror transform is (re)applied here too.
+function syncPreviewAspect(srcW, srcH) {
+  if (!srcW || !srcH) return;
+  const landscape = srcW >= srcH;
+  const w = landscape ? PREVIEW_MAX : Math.round(PREVIEW_MAX * srcW / srcH);
+  const h = landscape ? Math.round(PREVIEW_MAX * srcH / srcW) : PREVIEW_MAX;
+  if (w === PREVIEW_W && h === PREVIEW_H) return;
+  PREVIEW_W = w;
+  PREVIEW_H = h;
+  previewCanvas.width = w;
+  previewCanvas.height = h;
+  previewCtx.setTransform(-1, 0, 0, 1, w, 0);
+}
+syncPreviewAspect(PREVIEW_W, PREVIEW_H);
 
 // ---- mouth math -------------------------------------------------------------
 
@@ -155,8 +204,10 @@ const LM_OUTER_LIP = [
 ];
 
 function drawPreview(landmarks, mar, speaking) {
-  previewCtx.drawImage(video, 0, 0, video.videoWidth || CAMERA_W,
-                       video.videoHeight || CAMERA_H, 0, 0, PREVIEW_W, PREVIEW_H);
+  const srcW = video.videoWidth || CAMERA_W;
+  const srcH = video.videoHeight || CAMERA_H;
+  syncPreviewAspect(srcW, srcH);
+  previewCtx.drawImage(video, 0, 0, srcW, srcH, 0, 0, PREVIEW_W, PREVIEW_H);
   if (landmarks && landmarks.length >= 478) {
     previewCtx.lineWidth = 2;
     previewCtx.strokeStyle = speaking ? '#22c55e' : '#9ca3af';
@@ -240,91 +291,122 @@ async function stopCamera() {
 // ---- Raw audio level (fast path) -------------------------------------------
 //
 // Bypasses Web Speech API latency. We grab the mic stream once, run it through
-// an AnalyserNode, and sample RMS on every tick. `audioActive` flips true the
+// an AudioWorklet RMS processor, and sample the peak every tick. `audioActive` flips true the
 // instant volume crosses the threshold, which is typically 30-80ms after the
 // user starts speaking.
 
 let audioStream = null;
 let audioCtx = null;
-let audioProcessor = null;
+let audioNode = null;
 let audioSource = null;
+let audioSink = null;
 let audioActive = false;
-let lastAudioRms = 0;       // peak RMS from the previous tick window (for logs)
-let audioPeakSinceTick = 0; // running peak the processor updates in real time
-let displayPeakRms = 0;     // peak across the entire popup-push window (~100ms)
+let lastAudioRms = 0;       // RMS across the previous tick window (for logs)
+let audioEnergySinceTick = 0;
+let audioSamplesSinceTick = 0;
+let displayEnergySincePush = 0;
+let displaySamplesSincePush = 0;
 let displayActiveAny = false; // true if audioActive was true anywhere in window
 let lastAboveThresholdAt = 0;
+let audioStartDeferred = false;
+let userGestureSeen = false;
+
+function ingestAudioRms(rms) {
+  if (!Number.isFinite(rms) || rms < 0) rms = 0;
+  const energy = rms * rms;
+  audioEnergySinceTick += energy;
+  audioSamplesSinceTick += 1;
+  displayEnergySincePush += energy;
+  displaySamplesSincePush += 1;
+  const now = Date.now();
+  if (rms > settings.audioRmsThreshold) {
+    lastAboveThresholdAt = now;
+    audioActive = true;
+  } else if (audioActive && (now - lastAboveThresholdAt) >= AUDIO_HANGOVER_MS) {
+    // Hold audioActive across brief sub-threshold dips (consonants,
+    // pauses between syllables) so the streak counter doesn't reset mid-word.
+    audioActive = false;
+  }
+}
 
 async function startAudioLevel() {
-  if (audioStream) return;
+  if (audioStream) {
+    if (audioCtx && userGestureSeen && audioCtx.state === 'suspended') {
+      try {
+        await audioCtx.resume();
+        LOG('audio context resumed');
+      } catch (err) {
+        console.warn('[auto_unmute] audio context resume failed:', err);
+      }
+    }
+    return;
+  }
+  if (!userGestureSeen) {
+    audioStartDeferred = true;
+    LOG('audio start deferred until user gesture');
+    return;
+  }
+  audioStartDeferred = false;
   try {
     audioStream = await navigator.mediaDevices.getUserMedia({
       audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
       },
       video: false,
     });
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    await audioCtx.audioWorklet.addModule(chrome.runtime.getURL('audio_level_worklet.js'));
     audioSource = audioCtx.createMediaStreamSource(audioStream);
-    // ScriptProcessorNode is deprecated but universally supported and gives
-    // us callback-per-buffer semantics on the audio thread. bufferSize=256
-    // ≈ 5.3ms at 48kHz, so we evaluate the threshold ~190x/sec — there is
-    // no gap between samples and syllable onsets cannot fall through it.
-    // (AudioWorklet would be cleaner but requires a separate file URL,
-    // which adds MV3 packaging friction for negligible gain at this rate.)
-    audioProcessor = audioCtx.createScriptProcessor(256, 1, 1);
-    audioProcessor.onaudioprocess = (ev) => {
-      const data = ev.inputBuffer.getChannelData(0);
-      let sumSq = 0;
-      for (let i = 0; i < data.length; i++) {
-        const v = data[i];
-        sumSq += v * v;
-      }
-      const rms = Math.sqrt(sumSq / data.length);
-      // Track peak across all buffers since the tick last read it, so a
-      // single quiet frame can't mask a loud one.
-      if (rms > audioPeakSinceTick) audioPeakSinceTick = rms;
-      const now = Date.now();
-      if (rms > settings.audioRmsThreshold) {
-        lastAboveThresholdAt = now;
-        audioActive = true;
-      } else if (audioActive && (now - lastAboveThresholdAt) >= AUDIO_HANGOVER_MS) {
-        // Hold audioActive across brief sub-threshold dips (consonants,
-        // pauses between syllables) so the streak counter doesn't reset
-        // mid-word.
-        audioActive = false;
-      }
-    };
-    // ScriptProcessorNode only runs while connected to the destination.
-    // Route through a muted GainNode so we never feed mic audio back out.
-    const sink = audioCtx.createGain();
-    sink.gain.value = 0;
-    audioSource.connect(audioProcessor);
-    audioProcessor.connect(sink);
-    sink.connect(audioCtx.destination);
-    LOG('audio level detector started (script-processor, ~5ms granularity)');
+    audioNode = new AudioWorkletNode(audioCtx, 'auto-unmute-level', {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      channelCount: 1,
+    });
+    audioNode.port.onmessage = (ev) => ingestAudioRms(ev.data && ev.data.rms);
+    // Keep the worklet graph alive while routing silence to output.
+    audioSink = audioCtx.createGain();
+    audioSink.gain.value = 0;
+    audioSource.connect(audioNode);
+    audioNode.connect(audioSink);
+    audioSink.connect(audioCtx.destination);
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    LOG('audio level detector started (AudioWorklet, ~10ms granularity)');
   } catch (err) {
     console.warn('[auto_unmute] audio level unavailable:', err);
-    audioStream = null;
+    await stopAudioLevel();
+  }
+}
+
+function noteUserGesture() {
+  userGestureSeen = true;
+  if (audioEnabled && (audioStartDeferred || !audioStream || (audioCtx && audioCtx.state === 'suspended'))) {
+    void startAudioLevel();
   }
 }
 
 async function stopAudioLevel() {
   audioActive = false;
   lastAudioRms = 0;
-  audioPeakSinceTick = 0;
-  displayPeakRms = 0;
+  audioEnergySinceTick = 0;
+  audioSamplesSinceTick = 0;
+  displayEnergySincePush = 0;
+  displaySamplesSincePush = 0;
   displayActiveAny = false;
-  if (audioProcessor) {
-    try { audioProcessor.disconnect(); } catch (_e) { /* noop */ }
-    audioProcessor.onaudioprocess = null;
-    audioProcessor = null;
+  audioStartDeferred = false;
+  if (audioNode) {
+    try { audioNode.disconnect(); } catch (_e) { /* noop */ }
+    audioNode.port.onmessage = null;
+    audioNode = null;
   }
   if (audioSource) {
     try { audioSource.disconnect(); } catch (_e) { /* noop */ }
     audioSource = null;
+  }
+  if (audioSink) {
+    try { audioSink.disconnect(); } catch (_e) { /* noop */ }
+    audioSink = null;
   }
   if (audioCtx) {
     try { await audioCtx.close(); } catch (_e) { /* noop */ }
@@ -336,16 +418,17 @@ async function stopAudioLevel() {
   }
 }
 
-// The script-processor callback updates audioActive in real time, so the
-// per-tick poll only needs to snapshot the running peak (so logs see real
-// numbers) and reset it for the next window. We also accumulate the peak
-// across the entire popup-display window (~100ms) so the meter never
-// misses a syllable that landed between display pushes.
+// The AudioWorklet updates audioActive in real time, so the per-tick poll only
+// needs to snapshot the window RMS (so logs see real numbers) and reset it for
+// the next window. We also accumulate a longer-window RMS for the popup meter
+// so a single transient doesn't get exaggerated as a shout.
 function sampleAudioLevel() {
-  lastAudioRms = audioPeakSinceTick;
-  if (lastAudioRms > displayPeakRms) displayPeakRms = lastAudioRms;
+  lastAudioRms = audioSamplesSinceTick > 0
+    ? Math.sqrt(audioEnergySinceTick / audioSamplesSinceTick)
+    : 0;
   if (audioActive) displayActiveAny = true;
-  audioPeakSinceTick = 0;
+  audioEnergySinceTick = 0;
+  audioSamplesSinceTick = 0;
 }
 
 // ---- Web Speech API ---------------------------------------------------------
@@ -477,6 +560,11 @@ function requestInitialMuteState() {
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name === 'popup_opened') {
     popupOpen = true;
+    lastPopupOpenAt = Date.now();
+    // Clear any in-progress streak so the click that opened the popup can't
+    // push us over the edge on the very next tick.
+    speakStreak = 0;
+    audioActive = false;
     port.onDisconnect.addListener(() => { popupOpen = false; });
   }
 });
@@ -498,6 +586,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       }
       applyEngineFlags();
       sendResponse({ ok: true });
+      return false;
+    case 'user_gesture':
+      noteUserGesture();
       return false;
     default:
       return false;
@@ -522,13 +613,17 @@ function pushAudioLevelToPopup() {
   // tick is 25ms; emit every 4th tick = ~100ms = 10 fps, smooth + cheap.
   audioLevelTickCounter = (audioLevelTickCounter + 1) % 4;
   if (audioLevelTickCounter !== 0) return;
+  const rms = displaySamplesSincePush > 0
+    ? Math.sqrt(displayEnergySincePush / displaySamplesSincePush)
+    : 0;
   chrome.runtime.sendMessage({
     action: 'audio_level',
-    rms: displayPeakRms,
+    rms,
     active: displayActiveAny,
     threshold: settings.audioRmsThreshold,
   }, () => { void chrome.runtime.lastError; });
-  displayPeakRms = 0;
+  displayEnergySincePush = 0;
+  displaySamplesSincePush = 0;
   displayActiveAny = false;
 }
 
@@ -657,10 +752,13 @@ async function tick() {
 
   // Inverted state machine: only act when currently muted.
   if (muteState === 'mute' && machineState === STATE.LISTENING) {
-    const sinceMute = Date.now() - lastMutedAt;
-    if (sinceMute < MUTE_COOLDOWN_MS) {
-      // In post-mute cooldown — ignore any speech so a freshly-pressed mute
-      // doesn't get instantly undone by leftover audio.
+    const now = Date.now();
+    const sinceMute = now - lastMutedAt;
+    const sincePopupOpen = now - lastPopupOpenAt;
+    if (sinceMute < MUTE_COOLDOWN_MS || sincePopupOpen < POPUP_OPEN_COOLDOWN_MS) {
+      // In post-mute or post-popup-open cooldown — ignore any speech so a
+      // freshly-pressed mute (or the click that opened the popup) doesn't get
+      // instantly undone by leftover audio.
       speakStreak = 0;
     } else if (speaking) {
       speakStreak += 1;

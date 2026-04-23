@@ -21,6 +21,7 @@ INCLUDE=(
   change_popup.js
   auto_unmute.html
   auto_unmute.js
+  audio_level_worklet.js
   popup.html
   popup.js
   LICENSE

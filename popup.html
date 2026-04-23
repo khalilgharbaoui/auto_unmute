@@ -6,161 +6,804 @@
   <link rel="stylesheet" href="css/bootstrap.min.css">
   <title>Auto Unmute settings</title>
   <style>
-    body { min-width: 380px; }
-    #debug_image { width: 100%; max-width: 320px; border-radius: 4px; }
-    .activity-label { font-weight: 600; }
-    figure { margin: 0; text-align: center; font-size: 11px; }
+    :root {
+      --bg: #0b1220;
+      --panel: #101a2f;
+      --panel-2: #121f38;
+      --card: #1a2741;
+      --border: #2b3a57;
+      --muted: #90a0ba;
+      --text: #f7fafc;
+      --green: #2ee67d;
+      --green-2: #7cf0aa;
+      --green-soft: rgba(46, 230, 125, 0.14);
+      --shadow: 0 18px 50px rgba(4, 8, 17, 0.45);
+    }
 
-    /* Audio level meter */
-    .meter-wrap {
-      position: relative;
-      height: 14px;
-      background: #e5e7eb;
-      border-radius: 3px;
-      overflow: hidden;
-      margin-top: 4px;
+    * { box-sizing: border-box; }
+
+    html, body {
+      min-height: 0;
     }
-    .meter-fill {
-      position: absolute;
-      left: 0; top: 0; bottom: 0;
-      width: 0%;
-      background: linear-gradient(90deg, #22c55e 0%, #eab308 70%, #dc2626 100%);
-      transition: width 80ms linear;
+
+    body {
+      min-width: 760px;
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(46, 230, 125, 0.10), transparent 28%),
+        linear-gradient(180deg, #0b1220 0%, #0f172a 100%);
+      color: var(--text);
+      font: 13px/1.4 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-    .meter-thresh {
+
+    .popup-shell {
+      padding: 12px 18px 14px;
+    }
+
+    .hero {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 0 0 10px;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .hero-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .hero-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(circle at 30% 30%, #7cf0aa, var(--green));
+      box-shadow: 0 0 0 3px rgba(46, 230, 125, 0.08);
+    }
+
+    .hero-icon img {
+      width: 18px;
+      height: 18px;
+      filter: brightness(0) saturate(100%);
+    }
+
+    .hero-title {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .hero-subtitle {
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .hero-switch {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .hero-switch-label {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      color: var(--green-2);
+    }
+
+    .toggle-switch {
+      padding-left: 0;
+      margin: 0;
+      min-height: 0;
+    }
+
+    .toggle-switch .custom-control-label {
+      display: block;
+      width: 66px;
+      height: 34px;
+      padding: 0;
+      margin: 0;
+      cursor: pointer;
+    }
+
+    .toggle-switch .custom-control-label::before {
+      left: 0;
+      top: 0;
+      width: 66px;
+      height: 34px;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.22);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    }
+
+    .toggle-switch .custom-control-label::after {
+      top: 4px;
+      left: 4px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 6px 16px rgba(2, 6, 23, 0.35);
+    }
+
+    .toggle-switch .custom-control-input:checked ~ .custom-control-label::before {
+      background: linear-gradient(180deg, #7cf0aa, var(--green));
+    }
+
+    .toggle-switch .custom-control-input:checked ~ .custom-control-label::after {
+      transform: translateX(32px);
+    }
+
+    #settings {
+      margin-top: 2px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .layout-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.95fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .panel-section {
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+
+    .panel-section + .panel-section {
+      margin-top: 12px;
+    }
+
+    .section-label {
+      margin-bottom: 6px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #9fb0ca;
+    }
+
+    .engine-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 6px;
+    }
+
+    .engine-option {
+      min-height: 0;
+      padding-left: 0;
+      margin: 0;
+    }
+
+    .engine-option .custom-control-input {
       position: absolute;
-      top: -2px; bottom: -2px;
-      width: 2px;
-      background: #1f2937;
+      opacity: 0;
       pointer-events: none;
     }
+
+    .engine-option .custom-control-label {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 32px;
+      padding: 4px 12px 4px 34px;
+      border: 1px solid rgba(143, 160, 188, 0.10);
+      border-radius: 10px;
+      background: rgba(20, 30, 50, 0.55);
+      color: #dce6f5;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.2;
+      cursor: pointer;
+      transition: 120ms ease;
+    }
+
+    .engine-main {
+      flex: 1 1 auto;
+      padding-right: 10px;
+    }
+
+    .engine-option .custom-control-label::before,
+    .engine-option .custom-control-label::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+    }
+
+    .engine-option .custom-control-label::before {
+      left: 12px;
+      top: 50%;
+      width: 14px;
+      height: 14px;
+      margin-top: -7px;
+      border: 2px solid rgba(130, 148, 173, 0.55);
+      background: transparent;
+    }
+
+    .engine-option .custom-control-label::after {
+      left: 16px;
+      top: 50%;
+      width: 6px;
+      height: 6px;
+      margin-top: -3px;
+      background: transparent;
+    }
+
+    .engine-option .custom-control-input:checked ~ .custom-control-label {
+      border-color: var(--green);
+      background: var(--green-soft);
+      color: #effff6;
+      box-shadow: inset 0 0 0 1px rgba(46, 230, 125, 0.25);
+    }
+
+    .engine-option .custom-control-input:checked ~ .custom-control-label::before {
+      border-color: var(--green);
+    }
+
+    .engine-option .custom-control-input:checked ~ .custom-control-label::after {
+      background: var(--green);
+    }
+
+    .engine-note {
+      display: inline-block;
+      flex-shrink: 0;
+      margin-left: auto;
+      font-size: 10px;
+      font-weight: 500;
+      color: #7a8ba8;
+      text-align: right;
+      white-space: nowrap;
+      opacity: 0.75;
+    }
+
+    .control-block + .control-block,
+    .signal-group + .signal-group {
+      margin-top: 10px;
+    }
+
+    .control-label,
+    .form-group > label {
+      display: block;
+      margin-bottom: 4px;
+      color: #dbe6f6;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .control-value {
+      float: right;
+      color: #f8fafc;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      text-transform: none;
+    }
+
+    .control-hint {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: normal;
+      text-transform: none;
+    }
+
+    .custom-range {
+      width: 100%;
+      height: 6px;
+      background: transparent;
+      accent-color: var(--green);
+    }
+
+    .custom-range::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 999px;
+      background: #33425e;
+    }
+
+    .custom-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.88);
+      border-radius: 50%;
+      background: var(--green);
+      margin-top: -6px;
+      box-shadow: 0 4px 10px rgba(46, 230, 125, 0.28);
+    }
+
+    .custom-range::-moz-range-track {
+      height: 6px;
+      border: 0;
+      border-radius: 999px;
+      background: #33425e;
+    }
+
+    .custom-range::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.88);
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 4px 10px rgba(46, 230, 125, 0.28);
+    }
+
+    .custom-select {
+      height: 34px;
+      border: 1px solid rgba(143, 160, 188, 0.12);
+      border-radius: 10px;
+      background-color: rgba(30, 41, 59, 0.80);
+      color: var(--text);
+    }
+
+    .form-group {
+      margin-bottom: 0;
+    }
+
+    .custom-select:focus,
+    .custom-range:focus,
+    .engine-option .custom-control-input:focus ~ .custom-control-label,
+    .toggle-switch .custom-control-input:focus ~ .custom-control-label::before {
+      box-shadow: 0 0 0 3px rgba(46, 230, 125, 0.16);
+      outline: 0;
+    }
+
+    .slider-polarity {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    figure {
+      margin: 0;
+      text-align: center;
+      color: #91a1ba;
+      font-size: 11px;
+    }
+
+    .debug-panel {
+      height: 100%;
+    }
+
+    .debug-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 8px;
+    }
+
+    .debug-card {
+      min-height: 0;
+      padding: 8px 10px;
+      border: 1px solid rgba(143, 160, 188, 0.10);
+      border-radius: 12px;
+      background: rgba(7, 14, 28, 0.75);
+    }
+
+    .debug-card-title {
+      margin-bottom: 6px;
+      color: #9fb0ca;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .image-frame {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border: 1px solid rgba(143, 160, 188, 0.10);
+      border-radius: 12px;
+      background: #050b18;
+      overflow: hidden;
+    }
+
+    .image-frame::after {
+      content: "Camera diagnostics";
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: #5a6e8a;
+      font-size: 11px;
+      pointer-events: none;
+    }
+
+    #debug_image {
+      position: relative;
+      z-index: 1;
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0;
+      transition: opacity 120ms ease;
+    }
+
+    #debug_image[src] {
+      opacity: 1;
+    }
+
+    .meter-wrap {
+      position: relative;
+      height: 10px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(30, 42, 62, 0.8);
+    }
+
+    .meter-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 0%;
+      background: linear-gradient(90deg, #1fcf72 0%, #2ee67d 60%, #7cf0aa 100%);
+      transition: width 80ms linear;
+    }
+
+    .meter-thresh {
+      position: absolute;
+      top: -2px;
+      bottom: -2px;
+      width: 2px;
+      background: rgba(255, 255, 255, 0.92);
+      pointer-events: none;
+    }
+
     .meter-scale {
       display: flex;
       justify-content: space-between;
+      gap: 6px;
+      margin-top: 4px;
+      color: #7d8da8;
       font-size: 10px;
-      color: #6b7280;
-      margin-top: 2px;
     }
+
     .audio-status {
-      font-size: 11px;
-      color: #6b7280;
-      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      padding: 8px 12px;
+      border: 1px solid rgba(46, 230, 125, 0.25);
+      border-radius: 12px;
+      background: rgba(8, 39, 23, 0.65);
+      color: #d8ffe8;
+      font-size: 12px;
+      font-weight: 700;
     }
-    .audio-status.active { color: #16a34a; font-weight: 600; }
+
+    .audio-status::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(46, 230, 125, 0.5);
+      flex-shrink: 0;
+    }
+
+    .audio-status.active {
+      border-color: rgba(46, 230, 125, 0.50);
+      background: linear-gradient(135deg, rgba(10, 80, 38, 0.85), rgba(8, 60, 28, 0.90));
+      color: #effff5;
+      box-shadow: 0 0 20px rgba(46, 230, 125, 0.12);
+    }
+
+    .audio-status.active::before {
+      background: var(--green);
+      box-shadow: 0 0 6px rgba(46, 230, 125, 0.6);
+    }
+
+    .activity-label {
+      margin-top: 8px;
+      color: #b9c9e1;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .activity-label:empty::before {
+      content: "Recognition idle";
+      color: #6f819f;
+      font-weight: 500;
+    }
+
+    #speechRecognizedWord {
+      margin-top: 4px;
+      color: #8ed8aa;
+      font-size: 12px;
+      min-height: 18px;
+    }
+
+    #speechRecognizedWord:empty::before {
+      content: "No phrase captured yet";
+      color: #6f819f;
+    }
+
+    .debug-switches {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 12px;
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(143, 160, 188, 0.14);
+    }
+
+    .debug-switches.top-switches {
+      margin-top: 0;
+      margin-bottom: 8px;
+      padding-top: 0;
+      padding-bottom: 6px;
+      border-top: 0;
+      border-bottom: 1px solid rgba(143, 160, 188, 0.14);
+    }
+
+    .mini-switch {
+      min-height: 0;
+      margin: 0;
+      padding-left: 34px;
+    }
+
+    .mini-switch .custom-control-label {
+      color: #93a4bf;
+      font-size: 11px;
+      line-height: 20px;
+    }
+
+    .mini-switch .custom-control-label::before {
+      left: -34px;
+      top: 1px;
+      width: 28px;
+      height: 18px;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.22);
+    }
+
+    .mini-switch .custom-control-label::after {
+      top: 3px;
+      left: -32px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #ffffff;
+    }
+
+    .mini-switch .custom-control-input:checked ~ .custom-control-label::before {
+      background: rgba(46, 230, 125, 0.48);
+    }
+
+    .mini-switch .custom-control-input:checked ~ .custom-control-label::after {
+      transform: translateX(10px);
+    }
+
+    .debug-footer {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(143, 160, 188, 0.08);
+    }
+
+    .debugging-toggle {
+      min-height: 0;
+      margin: 0;
+      padding-left: 32px;
+      opacity: 0.72;
+    }
+
+    .debugging-toggle .custom-control-label {
+      color: #8fa1bc;
+      font-size: 11px;
+      line-height: 20px;
+    }
+
+    .debugging-toggle .custom-control-label::before {
+      left: -32px;
+      top: 1px;
+      width: 26px;
+      height: 16px;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.18);
+    }
+
+    .debugging-toggle .custom-control-label::after {
+      top: 3px;
+      left: -30px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #ffffff;
+    }
+
+    .debugging-toggle .custom-control-input:checked ~ .custom-control-label::before {
+      background: rgba(46, 230, 125, 0.42);
+    }
+
+    .debugging-toggle .custom-control-input:checked ~ .custom-control-label::after {
+      transform: translateX(10px);
+    }
   </style>
 </head>
 <body>
-  <div class="mx-2 my-1 px-2 py-1 small">
-    <div class="mb-2 custom-control custom-switch">
-      <input type="checkbox" class="custom-control-input" id="useAutoUnmute">
-      <label class="custom-control-label" for="useAutoUnmute">Auto-unmute</label>
+  <div class="popup-shell">
+    <div class="hero">
+      <div class="hero-brand">
+        <div class="hero-icon">
+          <img src="images/armed32.png" alt="Auto Unmute">
+        </div>
+        <div>
+          <div class="hero-title">Auto Unmute</div>
+          <div class="hero-subtitle">Active in this tab</div>
+        </div>
+      </div>
+
+      <div class="hero-switch">
+        <span id="useAutoUnmuteState" class="hero-switch-label">OFF</span>
+        <div class="custom-control custom-switch toggle-switch">
+          <input type="checkbox" class="custom-control-input" id="useAutoUnmute">
+          <label class="custom-control-label" for="useAutoUnmute"></label>
+        </div>
+      </div>
     </div>
 
-    <div id="settings" class="ml-2 pl-2" style="display:none;">
-      <h6 class="mb-2">Detection mode</h6>
-      <form id="engineForm">
-        <div class="custom-control custom-radio">
-          <input type="radio" id="engineSpeech" name="engine" value="engineSpeech" class="custom-control-input">
-          <label class="custom-control-label" for="engineSpeech">Audio only <span class="text-muted" style="font-size:11px;">(fastest)</span></label>
-        </div>
-        <div class="custom-control custom-radio">
-          <input type="radio" id="engineImage" name="engine" value="engineImage" class="custom-control-input">
-          <label class="custom-control-label" for="engineImage">Camera only <span class="text-muted" style="font-size:11px;">(mouth movement only)</span></label>
-        </div>
-        <div class="custom-control custom-radio">
-          <input type="radio" id="engineRecognition" name="engine" value="engineRecognition" class="custom-control-input">
-          <label class="custom-control-label" for="engineRecognition">Speech recognition only <span class="text-muted" style="font-size:11px;">(language based)</span></label>
-        </div>
-        <div class="custom-control custom-radio">
-          <input type="radio" id="engineImageSpeech" name="engine" value="engineImageSpeech" class="custom-control-input">
-          <label class="custom-control-label" for="engineImageSpeech">Audio + camera + speech recognition <span class="text-muted" style="font-size:11px;">(most reliable)</span></label>
-        </div>
-      </form>
-      <hr class="m-2">
+    <div id="settings" style="display:none;">
+      <div class="layout-grid">
+        <div class="controls-column">
+          <div class="panel-section">
+            <div class="section-label">Detection Engine</div>
+            <form id="engineForm" class="engine-grid">
+              <div class="custom-control custom-radio engine-option">
+                <input type="radio" id="engineSpeech" name="engine" value="engineSpeech" class="custom-control-input">
+                <label class="custom-control-label" for="engineSpeech"><span class="engine-main">Audio only</span><span class="engine-note">Fastest trigger</span></label>
+              </div>
+              <div class="custom-control custom-radio engine-option">
+                <input type="radio" id="engineImage" name="engine" value="engineImage" class="custom-control-input">
+                <label class="custom-control-label" for="engineImage"><span class="engine-main">Camera only</span><span class="engine-note">Mouth movement only</span></label>
+              </div>
+              <div class="custom-control custom-radio engine-option">
+                <input type="radio" id="engineRecognition" name="engine" value="engineRecognition" class="custom-control-input">
+                <label class="custom-control-label" for="engineRecognition"><span class="engine-main">Speech only</span><span class="engine-note">Language based</span></label>
+              </div>
+              <div class="custom-control custom-radio engine-option">
+                <input type="radio" id="engineImageSpeech" name="engine" value="engineImageSpeech" class="custom-control-input">
+                <label class="custom-control-label" for="engineImageSpeech"><span class="engine-main">Audio + camera + speech</span><span class="engine-note">Most reliable</span></label>
+              </div>
+            </form>
+          </div>
 
-      <div class="form-group">
-        <label for="speakFramesRequired">
-          Consecutive detections required: <span id="speakFramesRequiredLabel">1</span> checks (~<span id="speakFramesMs">25</span> ms)
-        </label>
-        <input type="range" class="custom-range" min="1" max="10" step="1" id="speakFramesRequired">
-      </div>
+          <div class="panel-section">
+            <div class="section-label">Core Tuning</div>
 
-      <div id="audioSettings" class="form-group">
-        <h6 class="mb-2">Audio Detection</h6>
-        <label for="audioRmsThreshold">
-          Mic sensitivity: trigger above <span id="audioThresholdLabel">-46</span> dB
-          <span id="audioThresholdHint" class="text-muted" style="font-size:11px;">(quiet speech)</span>
-        </label>
-        <input type="range" class="custom-range" min="-60" max="-20" step="1" id="audioRmsThreshold">
-        <div class="meter-scale">
-          <span>-60</span><span>-50</span><span>-40</span><span>-30</span><span>-20 dB</span>
-        </div>
-        <div class="meter-wrap">
-          <div class="meter-fill" id="audioMeterFill"></div>
-          <div class="meter-thresh" id="audioMeterThresh"></div>
-        </div>
-        <div class="meter-scale">
-          <span>silent</span><span>whisper</span><span>normal</span><span>loud</span><span>shout</span>
-        </div>
-        <div class="audio-status" id="audioStatus">Quiet</div>
-        <div class="custom-control custom-switch mt-1">
-          <input type="checkbox" class="custom-control-input" id="showAudioActivity" checked>
-          <label class="custom-control-label" for="showAudioActivity" style="font-size:11px;">Show live mic level</label>
-        </div>
-      </div>
+            <div class="control-block">
+              <label class="control-label" for="speakFramesRequired">
+                Detection hold
+                <span class="control-value"><span id="speakFramesRequiredLabel">1</span> checks / <span id="speakFramesMs">25</span> ms</span>
+              </label>
+              <input type="range" class="custom-range" min="1" max="10" step="1" id="speakFramesRequired">
+            </div>
 
-      <div id="imageSettings">
-        <h6 class="mb-2">Camera Detection</h6>
-        <div class="form-group">
-          <label for="select_camera">Camera</label>
-          <select class="custom-select custom-select-sm" id="select_camera"></select>
-        </div>
-        <div class="form-group">
-          <label for="range_mar_thresh">
-            Mouth-open threshold (lower = more sensitive):
-            <span id="marThresholdLabel">0.20</span>
-          </label>
-          <div class="row align-items-center">
-            <figure class="col-auto">
-              <img src="images/idle32.png" width="22" height="22" alt="more">
-              <figcaption>more</figcaption>
-            </figure>
-            <input type="range" class="custom-range col-7" min="0.05" max="0.60" step="0.01" id="range_mar_thresh">
-            <figure class="col-auto">
-              <img src="images/armed32.png" width="22" height="22" alt="less">
-              <figcaption>less</figcaption>
-            </figure>
+            <div id="audioSettings" class="signal-group">
+              <label class="control-label" for="audioRmsThreshold">
+                Mic sensitivity
+                <span class="control-value"><span id="audioThresholdLabel">-46</span> dB</span>
+                <span id="audioThresholdHint" class="control-hint">quiet speech</span>
+              </label>
+              <input type="range" class="custom-range" min="-60" max="0" step="1" id="audioRmsThreshold">
+            </div>
+
+            <div id="imageSettings" class="signal-group">
+              <div class="form-group" style="margin-bottom: 10px;">
+                <label class="control-label" for="select_camera">Camera</label>
+                <select class="custom-select custom-select-sm" id="select_camera"></select>
+              </div>
+
+              <div class="form-group mb-0">
+                <label class="control-label" for="range_mar_thresh">
+                  Mouth sensitivity
+                  <span class="control-value" id="marThresholdLabel">0.20</span>
+                </label>
+                <div class="slider-polarity">
+                  <figure>
+                    <img src="images/idle32.png" width="22" height="22" alt="more">
+                    <figcaption>more</figcaption>
+                  </figure>
+                  <input type="range" class="custom-range" min="0.02" max="1.00" step="0.01" id="range_mar_thresh">
+                  <figure>
+                    <img src="images/armed32.png" width="22" height="22" alt="less">
+                    <figcaption>less</figcaption>
+                  </figure>
+                </div>
+              </div>
+            </div>
+
+            <div id="speechSettings" class="signal-group">
+              <label class="control-label" for="select_speech_lang">Speech language</label>
+              <select class="custom-select custom-select-sm" id="select_speech_lang">
+                <option value="en-US">English (US)</option>
+                <option value="en-GB">English (UK)</option>
+                <option value="ja">日本語</option>
+                <option value="es-ES">Español</option>
+                <option value="fr-FR">Français</option>
+                <option value="de-DE">Deutsch</option>
+                <option value="pt-BR">Português (BR)</option>
+                <option value="zh-CN">中文 (简体)</option>
+              </select>
+            </div>
           </div>
         </div>
-        <div class="custom-control custom-switch mb-1">
-          <input type="checkbox" class="custom-control-input" id="showImageActivity">
-          <label class="custom-control-label" for="showImageActivity">Show camera diagnostics</label>
+
+        <div class="debug-column">
+          <div class="panel-section debug-panel">
+            <div class="section-label">Live Debug</div>
+
+            <div class="debug-switches top-switches">
+              <div class="custom-control custom-switch mini-switch">
+                <input type="checkbox" class="custom-control-input" id="showImageActivity">
+                <label class="custom-control-label" for="showImageActivity">Camera</label>
+              </div>
+              <div class="custom-control custom-switch mini-switch">
+                <input type="checkbox" class="custom-control-input" id="showAudioActivity" checked>
+                <label class="custom-control-label" for="showAudioActivity">Mic</label>
+              </div>
+              <div class="custom-control custom-switch mini-switch">
+                <input type="checkbox" class="custom-control-input" id="showSpeechActivity">
+                <label class="custom-control-label" for="showSpeechActivity">Speech</label>
+              </div>
+            </div>
+
+            <div class="debug-grid">
+              <div class="debug-card">
+                <div class="debug-card-title">Camera</div>
+                <div class="image-frame">
+                  <img id="debug_image" alt="">
+                </div>
+              </div>
+
+              <div class="debug-card">
+                <div class="debug-card-title">Voice</div>
+                <div class="meter-wrap">
+                  <div class="meter-fill" id="audioMeterFill"></div>
+                  <div class="meter-thresh" id="audioMeterThresh"></div>
+                </div>
+                <div class="meter-scale">
+                  <span>-60</span><span>-45</span><span>-30</span><span>-15</span><span>0 dB</span>
+                </div>
+                <div id="speechRecognized" class="activity-label"></div>
+                <div id="speechRecognizedWord"></div>
+              </div>
+            </div>
+
+            <div class="audio-status" id="audioStatus">Quiet</div>
+          </div>
         </div>
-        <img id="debug_image" alt=""><br>
       </div>
 
-      <div id="speechSettings">
-        <hr class="m-2">
-        <h6 class="mb-2">Speech Recognition</h6>
-        <div class="form-group">
-          <label for="select_speech_lang">Language</label>
-          <select class="custom-select custom-select-sm" id="select_speech_lang">
-            <option value="en-US">English (US)</option>
-            <option value="en-GB">English (UK)</option>
-            <option value="ja">日本語</option>
-            <option value="es-ES">Español</option>
-            <option value="fr-FR">Français</option>
-            <option value="de-DE">Deutsch</option>
-            <option value="pt-BR">Português (BR)</option>
-            <option value="zh-CN">中文 (简体)</option>
-          </select>
+      <div class="debug-footer">
+        <div class="custom-control custom-switch debugging-toggle">
+          <input type="checkbox" class="custom-control-input" id="debugLogging">
+          <label class="custom-control-label" for="debugLogging">Debugging</label>
         </div>
-        <div class="custom-control custom-switch mb-1">
-          <input type="checkbox" class="custom-control-input" id="showSpeechActivity">
-          <label class="custom-control-label" for="showSpeechActivity">Show speech diagnostics</label>
-        </div>
-        <div id="speechRecognized" class="activity-label"></div>
-        <div id="speechRecognizedWord"></div>
       </div>
     </div>
   </div>

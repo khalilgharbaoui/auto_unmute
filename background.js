@@ -21,6 +21,7 @@ const DEFAULTS = {
   showAudioActivity: true,
   showImageActivity: true,
   showSpeechActivity: true,
+  debugLogging: false,
 };
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -52,7 +53,7 @@ chrome.tabs.onRemoved.addListener(() => {
 // chrome.tabs.sendMessage on it.
 
 const RELAY_TO_CONTENT = new Set(['request_unmute', 'get_mute_state']);
-const RELAY_TO_EXTENSION = new Set(['mute_state', 'speech_activity']);
+const RELAY_TO_EXTENSION = new Set(['mute_state', 'speech_activity', 'settings_changed', 'user_gesture']);
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || !msg.action) return false;
