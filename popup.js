@@ -309,6 +309,9 @@ chrome.storage.sync.get(SETTING_KEYS, (data) => {
   populateCameras(data.cameraDeviceId);
 });
 
+const appVersionEl = document.getElementById('appVersion');
+if (appVersionEl) appVersionEl.textContent = `v${chrome.runtime.getManifest().version}`;
+
 // Tell the iframe the popup is open so it can stream debug previews.
 const port = chrome.runtime.connect({ name: 'popup_opened' });
 port.postMessage({ open: true });

@@ -131,8 +131,10 @@ bash scripts/render-store-assets.sh promo-small
 
 ### 2) Build and release (fully automated)
 
+`scripts/build-zip.sh` prunes any prior `dist/auto_unmute-*.zip` before writing the new ZIP, so `dist/` always reflects a single current build.
+
 ```bash
-# build package
+# build package (auto-prunes old dist zips)
 bash scripts/build-zip.sh
 
 # commit + push

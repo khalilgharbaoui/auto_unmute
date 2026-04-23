@@ -11,7 +11,8 @@ VERSION=$(node -e "console.log(require('./manifest.json').version)" 2>/dev/null 
 OUT_DIR="dist"
 ZIP_NAME="auto_unmute-${VERSION}.zip"
 mkdir -p "${OUT_DIR}"
-rm -f "${OUT_DIR}/${ZIP_NAME}"
+# Prune prior builds so dist/ only ever holds the current version.
+rm -f "${OUT_DIR}"/auto_unmute-*.zip
 
 # Files / dirs that ship in the extension. Anything not listed here is excluded.
 INCLUDE=(
