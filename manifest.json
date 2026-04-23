@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Google Meet Auto Unmute",
-  "version": "1.0.14",
-  "description": "Automatically unmutes you in Google Meet when you start speaking while muted, using audio level, mouth movement, and optional speech recognition.",
+  "version": "1.0.15",
+  "description": "Automatically unmutes you in Google Meet when you start speaking while muted, using local audio, camera, and speech signals.",
   "icons": {
     "16": "images/icon16.png",
     "32": "images/icon32.png",
